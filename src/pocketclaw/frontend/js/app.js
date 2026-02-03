@@ -175,6 +175,12 @@ function app() {
                 // Fetch initial status and settings
                 socket.runTool('status');
                 socket.send('get_settings');
+                
+                // Fetch initial data for sidebar badges
+                socket.send('get_reminders');
+                socket.send('get_intentions');
+                socket.send('get_skills');
+
                 // Auto-activate agent mode
                 if (this.agentActive) {
                     socket.toggleAgent(true);
