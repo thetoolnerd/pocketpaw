@@ -3,13 +3,14 @@
  * Alpine.js component for the dashboard
  *
  * Changes (2026-02-05):
+ * - Renamed "Missions" tab to "Crew" (Control Room feature)
  * - Fixed: Missing closing brace in loadMCData() causing syntax error
- * - Added Mission Control agent execution with real-time WebSocket streaming
+ * - Added Crew (Control Room) agent execution with real-time WebSocket streaming
  * - Added runningTasks, liveOutput state for task execution tracking
  * - Added handleMCEvent() to handle mc_task_started, mc_task_output, mc_task_completed, mc_activity_created
  * - Added runMCTask(), stopMCTask(), isMCTaskRunning(), getMCLiveOutput() methods
- * - Added Mission Control as full view (not modal) with Linear-inspired design
- * - Added "Missions" tab in top bar with live indicator
+ * - Added Crew as full view (not modal) with custom design
+ * - Added "Crew" tab in top bar with live indicator
  * - Added missionControl state: agents, tasks, activities, stats, selectedTask
  * - Added loadMCData(), createMCAgent(), createMCTask() methods
  * - Added selectMCTask(), updateMCTaskStatus(), updateMCTaskPriority() methods
@@ -1622,8 +1623,8 @@ function app() {
                     };
                 }
             } catch (e) {
-                console.error('Failed to load Mission Control data:', e);
-                this.showToast('Failed to load Mission Control', 'error');
+                console.error('Failed to load Crew data:', e);
+                this.showToast('Failed to load Crew', 'error');
             } finally {
                 this.missionControl.loading = false;
             }
