@@ -376,12 +376,164 @@ Mission Control is inspired by [OpenClaw](https://github.com/pbteja1998/openclaw
 - **More general** - Not hardcoded to marketing/SaaS use cases
 - **Integrated** - Built into PocketPaw's existing architecture
 
+## Agent Execution
+
+Mission Control can execute tasks using AI agents with real-time streaming output.
+
+### Running a Task
+
+```python
+from pocketclaw.mission_control import get_mc_task_executor
+
+executor = get_mc_task_executor()
+
+# Execute a task (blocking, returns when complete)
+result = await executor.execute_task(task_id, agent_id)
+print(f"Status: {result['status']}")  # 'completed', 'error', or 'stopped'
+print(f"Output: {result['output']}")
+
+# Execute in background (non-blocking)
+await executor.execute_task_background(task_id, agent_id)
+
+# Stop a running task
+await executor.stop_task(task_id)
+
+# Check if task is running
+if executor.is_task_running(task_id):
+    print("Task is still running")
+
+# Get all running tasks
+running = executor.get_running_tasks()
+```
+
+### REST API for Execution
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/tasks/{id}/run` | Start task execution with an agent |
+| POST | `/tasks/{id}/stop` | Stop a running task |
+| GET | `/tasks/running` | List currently running tasks |
+
+```bash
+# Run a task
+curl -X POST http://localhost:8888/api/mission-control/tasks/{task_id}/run \
+  -H "Content-Type: application/json" \
+  -d '{"agent_id": "{agent_id}"}'
+
+# Stop a task
+curl -X POST http://localhost:8888/api/mission-control/tasks/{task_id}/stop
+
+# Get running tasks
+curl http://localhost:8888/api/mission-control/tasks/running
+```
+
+### What Happens During Execution
+
+1. **Initialization**: Creates a dedicated `AgentRouter` for the task using the agent's backend setting
+2. **Status Update**: Sets task status to `in_progress` and agent status to `active`
+3. **Prompt Building**: Constructs a prompt with task details and agent context
+4. **Streaming**: Agent runs and streams output chunks via WebSocket
+5. **Completion**: Updates task to `done` (or `blocked` on error), agent to `idle`
+
+## WebSocket Events
+
+Mission Control broadcasts events via WebSocket for real-time UI updates.
+
+### Event Types
+
+| Event | Trigger | Key Data |
+|-------|---------|----------|
+| `mc_task_started` | Execution begins | task_id, agent_id, agent_name, task_title |
+| `mc_task_output` | Agent produces output | task_id, content, output_type (message/tool_use/tool_result) |
+| `mc_task_completed` | Execution ends | task_id, agent_id, status (completed/error/stopped), error |
+| `mc_activity_created` | Activity logged | activity (full activity dict) |
+
+### Event Payloads
+
+```javascript
+// mc_task_started
+{
+    "event_type": "mc_task_started",
+    "data": {
+        "task_id": "uuid",
+        "agent_id": "uuid",
+        "agent_name": "Jarvis",
+        "task_title": "Research competitors",
+        "timestamp": "2026-02-05T10:00:00Z"
+    }
+}
+
+// mc_task_output
+{
+    "event_type": "mc_task_output",
+    "data": {
+        "task_id": "uuid",
+        "content": "Analyzing competitor #1...",
+        "output_type": "message",  // or "tool_use", "tool_result"
+        "timestamp": "2026-02-05T10:00:01Z"
+    }
+}
+
+// mc_task_completed
+{
+    "event_type": "mc_task_completed",
+    "data": {
+        "task_id": "uuid",
+        "agent_id": "uuid",
+        "status": "completed",  // "completed", "error", or "stopped"
+        "error": null,  // Error message if status is "error"
+        "timestamp": "2026-02-05T10:05:00Z"
+    }
+}
+
+// mc_activity_created
+{
+    "event_type": "mc_activity_created",
+    "data": {
+        "activity": {
+            "id": "uuid",
+            "type": "task_completed",
+            "agent_id": "uuid",
+            "task_id": "uuid",
+            "message": "Jarvis completed 'Research competitors'",
+            "created_at": "2026-02-05T10:05:00Z"
+        }
+    }
+}
+```
+
+### Frontend Integration
+
+Events come through the WebSocket as `system_event` messages. The frontend handles them based on the `event_type` prefix:
+
+```javascript
+socket.on('system_event', (data) => {
+    if (data.event_type.startsWith('mc_')) {
+        this.handleMCEvent(data);
+    }
+});
+
+handleMCEvent(data) {
+    if (data.event_type === 'mc_task_started') {
+        // Update task status to in_progress
+        // Update agent status to active
+    } else if (data.event_type === 'mc_task_output') {
+        // Append to live output display
+    } else if (data.event_type === 'mc_task_completed') {
+        // Update task to done/blocked
+        // Refresh stats
+    } else if (data.event_type === 'mc_activity_created') {
+        // Prepend to activity feed
+    }
+}
+```
+
 ## Future Enhancements
 
 Planned features:
 
-- [ ] UI Dashboard for Mission Control
-- [ ] WebSocket real-time updates for activity feed
-- [ ] Agent execution (actually running agent tasks)
+- [x] UI Dashboard for Mission Control
+- [x] WebSocket real-time updates for activity feed
+- [x] Agent execution (actually running agent tasks)
 - [ ] Thread subscriptions (auto-notify on task updates)
 - [ ] Team templates (pre-configured agent squads)
