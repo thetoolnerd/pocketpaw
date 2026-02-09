@@ -20,6 +20,9 @@ _EXTRA_PACKAGES: dict[str, str] = {
     "discord": "pocketpaw[discord]",
     "slack": "pocketpaw[slack]",
     "whatsapp-personal": "pocketpaw[whatsapp-personal]",
+    "matrix": "pocketpaw[matrix]",
+    "teams": "pocketpaw[teams]",
+    "gchat": "pocketpaw[gchat]",
 }
 
 

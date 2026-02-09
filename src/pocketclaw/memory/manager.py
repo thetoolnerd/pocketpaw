@@ -1,7 +1,7 @@
 # Memory manager - high-level interface for memory operations.
 # Created: 2026-02-02
 # Updated: 2026-02-04 - Added Mem0 backend support
-# Part of Nanobot Pattern Adoption - Memory System
+# Updated: 2026-02-07 - Configurable providers, auto-learn, semantic context - Memory System
 
 import logging
 from datetime import datetime
@@ -19,6 +19,14 @@ def create_memory_store(
     base_path: Path | None = None,
     user_id: str = "default",
     use_inference: bool = True,
+    llm_provider: str = "anthropic",
+    llm_model: str = "claude-haiku-4-5-20251001",
+    embedder_provider: str = "openai",
+    embedder_model: str = "text-embedding-3-small",
+    vector_store: str = "qdrant",
+    ollama_base_url: str = "http://localhost:11434",
+    anthropic_api_key: str | None = None,
+    openai_api_key: str | None = None,
 ) -> MemoryStoreProtocol:
     """
     Factory function to create the appropriate memory store.
@@ -28,6 +36,12 @@ def create_memory_store(
         base_path: Base path for storage
         user_id: User ID for mem0 scoping
         use_inference: Whether to use LLM inference (mem0 only)
+        llm_provider: LLM provider for mem0 ('anthropic', 'openai', 'ollama')
+        llm_model: LLM model name for mem0
+        embedder_provider: Embedder provider ('openai', 'ollama', 'huggingface')
+        embedder_model: Embedding model name
+        vector_store: Vector store ('qdrant' or 'chroma')
+        ollama_base_url: Ollama base URL (when using ollama)
 
     Returns:
         MemoryStoreProtocol implementation
@@ -47,10 +61,19 @@ def create_memory_store(
                 user_id=user_id,
                 data_path=base_path,
                 use_inference=use_inference,
+                llm_provider=llm_provider,
+                llm_model=llm_model,
+                embedder_provider=embedder_provider,
+                embedder_model=embedder_model,
+                vector_store=vector_store,
+                ollama_base_url=ollama_base_url,
+                anthropic_api_key=anthropic_api_key,
+                openai_api_key=openai_api_key,
             )
         except ImportError:
             logger.warning(
-                "mem0ai not installed, falling back to file backend. Install with: pip install mem0ai"
+                "mem0ai not installed, falling back to file backend. "
+                "Install with: pip install pocketpaw[memory]"
             )
             return FileMemoryStore(base_path)
     else:
@@ -85,6 +108,14 @@ class MemoryManager:
         backend: str = "file",
         user_id: str = "default",
         use_inference: bool = True,
+        llm_provider: str = "anthropic",
+        llm_model: str = "claude-haiku-4-5-20251001",
+        embedder_provider: str = "openai",
+        embedder_model: str = "text-embedding-3-small",
+        vector_store: str = "qdrant",
+        ollama_base_url: str = "http://localhost:11434",
+        anthropic_api_key: str | None = None,
+        openai_api_key: str | None = None,
     ):
         """
         Initialize memory manager.
@@ -95,6 +126,12 @@ class MemoryManager:
             backend: Backend type - 'file' or 'mem0'.
             user_id: User ID for mem0 scoping.
             use_inference: Whether to use LLM inference (mem0 only).
+            llm_provider: LLM provider for mem0.
+            llm_model: LLM model for mem0.
+            embedder_provider: Embedder provider for mem0.
+            embedder_model: Embedding model for mem0.
+            vector_store: Vector store for mem0.
+            ollama_base_url: Ollama base URL for mem0.
         """
         if store:
             self._store = store
@@ -104,6 +141,14 @@ class MemoryManager:
                 base_path=base_path,
                 user_id=user_id,
                 use_inference=use_inference,
+                llm_provider=llm_provider,
+                llm_model=llm_model,
+                embedder_provider=embedder_provider,
+                embedder_model=embedder_model,
+                vector_store=vector_store,
+                ollama_base_url=ollama_base_url,
+                anthropic_api_key=anthropic_api_key,
+                openai_api_key=openai_api_key,
             )
 
     # =========================================================================
@@ -403,6 +448,53 @@ class MemoryManager:
             logger.debug("LLM summary failed, falling back to Tier 1", exc_info=True)
             return None
 
+    async def auto_learn(
+        self,
+        messages: list[dict[str, str]],
+        user_id: str | None = None,
+    ) -> dict:
+        """Extract and evolve long-term facts from a conversation.
+
+        Only works with the mem0 backend. For file backend, this is a no-op.
+
+        Args:
+            messages: Recent conversation messages [{"role": "...", "content": "..."}].
+            user_id: User ID for scoping.
+
+        Returns:
+            Result dict from mem0 (or empty dict for file backend).
+        """
+        if hasattr(self._store, "auto_learn"):
+            return await self._store.auto_learn(messages, user_id=user_id)
+        return {}
+
+    async def get_semantic_context(self, query: str, limit: int = 5) -> str:
+        """Get semantically relevant memory context for a user query.
+
+        Uses mem0 semantic search to find the most relevant memories
+        for the current conversation. Falls back to get_context_for_agent()
+        for file backend.
+
+        Args:
+            query: The user's current message/query.
+            limit: Max memories to include.
+
+        Returns:
+            Formatted context string for system prompt injection.
+        """
+        if hasattr(self._store, "semantic_search"):
+            results = await self._store.semantic_search(query, limit=limit)
+            if results:
+                parts = ["## Relevant Memories\n"]
+                for item in results:
+                    memory_text = item.get("memory", "")
+                    if memory_text:
+                        parts.append(f"- {memory_text}")
+                return "\n".join(parts)
+
+        # Fall back to standard context
+        return await self.get_context_for_agent()
+
     async def clear_session(self, session_key: str) -> int:
         """Clear session history."""
         return await self._store.clear_session(session_key)
@@ -433,6 +525,14 @@ def get_memory_manager(force_reload: bool = False) -> MemoryManager:
         _manager = MemoryManager(
             backend=settings.memory_backend,
             use_inference=settings.memory_use_inference,
+            llm_provider=settings.mem0_llm_provider,
+            llm_model=settings.mem0_llm_model,
+            embedder_provider=settings.mem0_embedder_provider,
+            embedder_model=settings.mem0_embedder_model,
+            vector_store=settings.mem0_vector_store,
+            ollama_base_url=settings.mem0_ollama_base_url,
+            anthropic_api_key=settings.anthropic_api_key,
+            openai_api_key=settings.openai_api_key,
         )
 
     return _manager

@@ -23,7 +23,8 @@ function app() {
         ...window.PocketPaw.Transparency.getState(),
         ...window.PocketPaw.RemoteAccess.getState(),
         ...window.PocketPaw.MissionControl.getState(),
-        ...window.PocketPaw.Channels.getState()
+        ...window.PocketPaw.Channels.getState(),
+        ...window.PocketPaw.MCP.getState()
     };
 
     // Assemble feature methods
@@ -36,7 +37,8 @@ function app() {
         ...window.PocketPaw.Transparency.getMethods(),
         ...window.PocketPaw.RemoteAccess.getMethods(),
         ...window.PocketPaw.MissionControl.getMethods(),
-        ...window.PocketPaw.Channels.getMethods()
+        ...window.PocketPaw.Channels.getMethods(),
+        ...window.PocketPaw.MCP.getMethods()
     };
 
     return {
@@ -79,7 +81,15 @@ function app() {
             ttsProvider: 'openai',
             ttsVoice: 'alloy',
             selfAuditEnabled: true,
-            selfAuditSchedule: '0 3 * * *'
+            selfAuditSchedule: '0 3 * * *',
+            memoryBackend: 'file',
+            mem0AutoLearn: true,
+            mem0LlmProvider: 'anthropic',
+            mem0LlmModel: 'claude-haiku-4-5-20251001',
+            mem0EmbedderProvider: 'openai',
+            mem0EmbedderModel: 'text-embedding-3-small',
+            mem0VectorStore: 'qdrant',
+            mem0OllamaBaseUrl: 'http://localhost:11434'
         },
 
         // API Keys (not persisted client-side, but we track if saved on server)
@@ -309,6 +319,30 @@ function app() {
                 }
                 if (serverSettings.selfAuditSchedule) {
                     this.settings.selfAuditSchedule = serverSettings.selfAuditSchedule;
+                }
+                if (serverSettings.memoryBackend) {
+                    this.settings.memoryBackend = serverSettings.memoryBackend;
+                }
+                if (serverSettings.mem0AutoLearn !== undefined) {
+                    this.settings.mem0AutoLearn = serverSettings.mem0AutoLearn;
+                }
+                if (serverSettings.mem0LlmProvider) {
+                    this.settings.mem0LlmProvider = serverSettings.mem0LlmProvider;
+                }
+                if (serverSettings.mem0LlmModel) {
+                    this.settings.mem0LlmModel = serverSettings.mem0LlmModel;
+                }
+                if (serverSettings.mem0EmbedderProvider) {
+                    this.settings.mem0EmbedderProvider = serverSettings.mem0EmbedderProvider;
+                }
+                if (serverSettings.mem0EmbedderModel) {
+                    this.settings.mem0EmbedderModel = serverSettings.mem0EmbedderModel;
+                }
+                if (serverSettings.mem0VectorStore) {
+                    this.settings.mem0VectorStore = serverSettings.mem0VectorStore;
+                }
+                if (serverSettings.mem0OllamaBaseUrl) {
+                    this.settings.mem0OllamaBaseUrl = serverSettings.mem0OllamaBaseUrl;
                 }
                 // Store API key availability (for UI feedback)
                 this.hasAnthropicKey = serverSettings.hasAnthropicKey || false;

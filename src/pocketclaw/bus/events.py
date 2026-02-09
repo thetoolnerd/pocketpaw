@@ -18,6 +18,10 @@ class Channel(str, Enum):
     DISCORD = "discord"
     SLACK = "slack"
     WHATSAPP = "whatsapp"
+    SIGNAL = "signal"
+    MATRIX = "matrix"
+    TEAMS = "teams"
+    GOOGLE_CHAT = "google_chat"
     SYSTEM = "system"  # Internal (subagents, intentions)
 
 

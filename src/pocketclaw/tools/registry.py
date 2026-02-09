@@ -1,6 +1,6 @@
 # Tool registry for managing available tools.
 # Created: 2026-02-02
-# Part of Nanobot Pattern Adoption
+
 
 from __future__ import annotations
 

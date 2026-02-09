@@ -357,6 +357,36 @@ class ClaudeAgentSDK:
                 )
         return tools
 
+    def _get_mcp_servers(self) -> list[dict]:
+        """Load enabled MCP server configs, filtered by tool policy.
+
+        Returns a list of dicts suitable for the Claude SDK ``mcp_servers`` option.
+        Only stdio servers are supported by the SDK's built-in MCP integration.
+        """
+        try:
+            from pocketclaw.mcp.config import load_mcp_config
+        except ImportError:
+            return []
+
+        configs = load_mcp_config()
+        servers = []
+        for cfg in configs:
+            if not cfg.enabled:
+                continue
+            if cfg.transport != "stdio":
+                logger.debug("Skipping MCP server '%s' (transport=%s)", cfg.name, cfg.transport)
+                continue
+            if not self._policy.is_mcp_server_allowed(cfg.name):
+                logger.info("MCP server '%s' blocked by tool policy", cfg.name)
+                continue
+            servers.append({
+                "name": cfg.name,
+                "command": cfg.command,
+                "args": cfg.args,
+                "env": cfg.env,
+            })
+        return servers
+
     async def chat(
         self,
         message: str,
@@ -441,6 +471,12 @@ class ClaudeAgentSDK:
                 "hooks": hooks,
                 "cwd": str(self._cwd),  # Working directory
             }
+
+            # Wire in MCP servers (policy-filtered)
+            mcp_servers = self._get_mcp_servers()
+            if mcp_servers:
+                options_kwargs["mcp_servers"] = mcp_servers
+                logger.info("MCP: passing %d servers to Claude SDK", len(mcp_servers))
 
             # Enable token-by-token streaming if StreamEvent is available
             if self._StreamEvent is not None:

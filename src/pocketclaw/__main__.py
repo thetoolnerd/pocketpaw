@@ -118,6 +118,76 @@ async def run_multi_channel_mode(settings: Settings, args: argparse.Namespace) -
                 )
             )
 
+    if getattr(args, "signal", False):
+        if not settings.signal_phone_number:
+            logger.error("Signal not configured. Set POCKETCLAW_SIGNAL_PHONE_NUMBER.")
+        else:
+            from pocketclaw.bus.adapters.signal_adapter import SignalAdapter
+
+            adapters.append(
+                SignalAdapter(
+                    api_url=settings.signal_api_url,
+                    phone_number=settings.signal_phone_number,
+                    allowed_phone_numbers=settings.signal_allowed_phone_numbers,
+                )
+            )
+
+    if getattr(args, "matrix", False):
+        if not settings.matrix_homeserver or not settings.matrix_user_id:
+            logger.error(
+                "Matrix not configured. Set POCKETCLAW_MATRIX_HOMESERVER "
+                "and POCKETCLAW_MATRIX_USER_ID."
+            )
+        else:
+            from pocketclaw.bus.adapters.matrix_adapter import MatrixAdapter
+
+            adapters.append(
+                MatrixAdapter(
+                    homeserver=settings.matrix_homeserver,
+                    user_id=settings.matrix_user_id,
+                    access_token=settings.matrix_access_token,
+                    password=settings.matrix_password,
+                    allowed_room_ids=settings.matrix_allowed_room_ids,
+                    device_id=settings.matrix_device_id,
+                )
+            )
+
+    if getattr(args, "teams", False):
+        if not settings.teams_app_id or not settings.teams_app_password:
+            logger.error(
+                "Teams not configured. Set POCKETCLAW_TEAMS_APP_ID "
+                "and POCKETCLAW_TEAMS_APP_PASSWORD."
+            )
+        else:
+            from pocketclaw.bus.adapters.teams_adapter import TeamsAdapter
+
+            adapters.append(
+                TeamsAdapter(
+                    app_id=settings.teams_app_id,
+                    app_password=settings.teams_app_password,
+                    allowed_tenant_ids=settings.teams_allowed_tenant_ids,
+                    webhook_port=settings.teams_webhook_port,
+                )
+            )
+
+    if getattr(args, "gchat", False):
+        if not settings.gchat_service_account_key:
+            logger.error(
+                "Google Chat not configured. Set POCKETCLAW_GCHAT_SERVICE_ACCOUNT_KEY."
+            )
+        else:
+            from pocketclaw.bus.adapters.gchat_adapter import GoogleChatAdapter
+
+            adapters.append(
+                GoogleChatAdapter(
+                    mode=settings.gchat_mode,
+                    service_account_key=settings.gchat_service_account_key,
+                    project_id=settings.gchat_project_id,
+                    subscription_id=settings.gchat_subscription_id,
+                    allowed_space_ids=settings.gchat_allowed_space_ids,
+                )
+            )
+
     if not adapters:
         logger.error("No channel adapters could be started. Check your configuration.")
         return
@@ -206,6 +276,10 @@ Examples:
     parser.add_argument(
         "--whatsapp", action="store_true", help="Run headless WhatsApp webhook server"
     )
+    parser.add_argument("--signal", action="store_true", help="Run headless Signal bot")
+    parser.add_argument("--matrix", action="store_true", help="Run headless Matrix bot")
+    parser.add_argument("--teams", action="store_true", help="Run headless Teams bot")
+    parser.add_argument("--gchat", action="store_true", help="Run headless Google Chat bot")
     parser.add_argument(
         "--security-audit",
         action="store_true",
@@ -224,7 +298,10 @@ Examples:
     args = parser.parse_args()
     settings = get_settings()
 
-    has_channel_flag = args.discord or args.slack or args.whatsapp
+    has_channel_flag = (
+        args.discord or args.slack or args.whatsapp
+        or args.signal or args.matrix or args.teams or args.gchat
+    )
 
     try:
         if args.security_audit:

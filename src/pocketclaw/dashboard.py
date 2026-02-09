@@ -43,7 +43,7 @@ from pocketclaw.tunnel import get_tunnel_manager
 
 logger = logging.getLogger(__name__)
 
-# Global Nanobot Components
+
 ws_adapter = WebSocketAdapter()
 agent_loop = AgentLoop()
 # Retain active_connections for legacy broadcasts until fully migrated
@@ -177,6 +177,68 @@ async def _start_channel_adapter(channel: str, settings: Settings | None = None)
         _channel_adapters["telegram"] = adapter
         return True
 
+    if channel == "signal":
+        if not settings.signal_phone_number:
+            return False
+        from pocketclaw.bus.adapters.signal_adapter import SignalAdapter
+
+        adapter = SignalAdapter(
+            api_url=settings.signal_api_url,
+            phone_number=settings.signal_phone_number,
+            allowed_phone_numbers=settings.signal_allowed_phone_numbers,
+        )
+        await adapter.start(bus)
+        _channel_adapters["signal"] = adapter
+        return True
+
+    if channel == "matrix":
+        if not settings.matrix_homeserver or not settings.matrix_user_id:
+            return False
+        from pocketclaw.bus.adapters.matrix_adapter import MatrixAdapter
+
+        adapter = MatrixAdapter(
+            homeserver=settings.matrix_homeserver,
+            user_id=settings.matrix_user_id,
+            access_token=settings.matrix_access_token,
+            password=settings.matrix_password,
+            allowed_room_ids=settings.matrix_allowed_room_ids,
+            device_id=settings.matrix_device_id,
+        )
+        await adapter.start(bus)
+        _channel_adapters["matrix"] = adapter
+        return True
+
+    if channel == "teams":
+        if not settings.teams_app_id or not settings.teams_app_password:
+            return False
+        from pocketclaw.bus.adapters.teams_adapter import TeamsAdapter
+
+        adapter = TeamsAdapter(
+            app_id=settings.teams_app_id,
+            app_password=settings.teams_app_password,
+            allowed_tenant_ids=settings.teams_allowed_tenant_ids,
+            webhook_port=settings.teams_webhook_port,
+        )
+        await adapter.start(bus)
+        _channel_adapters["teams"] = adapter
+        return True
+
+    if channel == "google_chat":
+        if not settings.gchat_service_account_key:
+            return False
+        from pocketclaw.bus.adapters.gchat_adapter import GoogleChatAdapter
+
+        adapter = GoogleChatAdapter(
+            mode=settings.gchat_mode,
+            service_account_key=settings.gchat_service_account_key,
+            project_id=settings.gchat_project_id,
+            subscription_id=settings.gchat_subscription_id,
+            allowed_space_ids=settings.gchat_allowed_space_ids,
+        )
+        await adapter.start(bus)
+        _channel_adapters["google_chat"] = adapter
+        return True
+
     return False
 
 
@@ -198,16 +260,25 @@ async def startup_event():
 
     # Start Agent Loop
     asyncio.create_task(agent_loop.start())
-    logger.info("Agent Loop started (Nanobot Architecture)")
+    logger.info("Agent Loop started")
 
     # Auto-start all configured channel adapters
     settings = Settings.load()
-    for channel in ("discord", "slack", "whatsapp", "telegram"):
+    for ch in ("discord", "slack", "whatsapp", "telegram", "signal", "matrix", "teams", "google_chat"):
         try:
-            if await _start_channel_adapter(channel, settings):
-                logger.info(f"{channel.title()} adapter auto-started alongside dashboard")
+            if await _start_channel_adapter(ch, settings):
+                logger.info(f"{ch.title()} adapter auto-started alongside dashboard")
         except Exception as e:
-            logger.warning(f"Failed to auto-start {channel} adapter: {e}")
+            logger.warning(f"Failed to auto-start {ch} adapter: {e}")
+
+    # Auto-start enabled MCP servers
+    try:
+        from pocketclaw.mcp.manager import get_mcp_manager
+
+        mcp = get_mcp_manager()
+        await mcp.start_enabled_servers()
+    except Exception as e:
+        logger.warning("Failed to start MCP servers: %s", e)
 
     # Start reminder scheduler
     scheduler = get_scheduler()
@@ -239,6 +310,133 @@ async def shutdown_event():
     # Stop reminder scheduler
     scheduler = get_scheduler()
     scheduler.stop()
+
+    # Stop MCP servers
+    try:
+        from pocketclaw.mcp.manager import get_mcp_manager
+
+        mcp = get_mcp_manager()
+        await mcp.stop_all()
+    except Exception as e:
+        logger.warning("Error stopping MCP servers: %s", e)
+
+
+# ==================== MCP Server API ====================
+
+
+@app.get("/api/mcp/status")
+async def get_mcp_status():
+    """Get status of all configured MCP servers."""
+    from pocketclaw.mcp.manager import get_mcp_manager
+
+    mgr = get_mcp_manager()
+    return mgr.get_server_status()
+
+
+@app.post("/api/mcp/add")
+async def add_mcp_server(request: Request):
+    """Add a new MCP server configuration and optionally start it."""
+    from pocketclaw.mcp.config import MCPServerConfig
+    from pocketclaw.mcp.manager import get_mcp_manager
+
+    data = await request.json()
+    config = MCPServerConfig(
+        name=data.get("name", ""),
+        transport=data.get("transport", "stdio"),
+        command=data.get("command", ""),
+        args=data.get("args", []),
+        url=data.get("url", ""),
+        env=data.get("env", {}),
+        enabled=data.get("enabled", True),
+    )
+    if not config.name:
+        raise HTTPException(status_code=400, detail="Server name is required")
+
+    mgr = get_mcp_manager()
+    mgr.add_server_config(config)
+
+    # Auto-start if enabled
+    if config.enabled:
+        try:
+            await mgr.start_server(config)
+        except Exception as e:
+            logger.warning("Failed to auto-start MCP server '%s': %s", config.name, e)
+
+    return {"status": "ok"}
+
+
+@app.post("/api/mcp/remove")
+async def remove_mcp_server(request: Request):
+    """Remove an MCP server config and stop it if running."""
+    from pocketclaw.mcp.manager import get_mcp_manager
+
+    data = await request.json()
+    name = data.get("name", "")
+
+    mgr = get_mcp_manager()
+    await mgr.stop_server(name)
+    removed = mgr.remove_server_config(name)
+    if not removed:
+        return {"error": f"Server '{name}' not found"}
+    return {"status": "ok"}
+
+
+@app.post("/api/mcp/toggle")
+async def toggle_mcp_server(request: Request):
+    """Enable or disable an MCP server."""
+    from pocketclaw.mcp.manager import get_mcp_manager
+
+    data = await request.json()
+    name = data.get("name", "")
+
+    mgr = get_mcp_manager()
+    new_state = mgr.toggle_server_config(name)
+    if new_state is None:
+        return {"error": f"Server '{name}' not found"}
+
+    # Start or stop based on new state
+    if new_state:
+        from pocketclaw.mcp.config import load_mcp_config
+
+        configs = load_mcp_config()
+        config = next((c for c in configs if c.name == name), None)
+        if config:
+            await mgr.start_server(config)
+    else:
+        await mgr.stop_server(name)
+
+    return {"status": "ok", "enabled": new_state}
+
+
+@app.post("/api/mcp/test")
+async def test_mcp_server(request: Request):
+    """Test an MCP server connection and return discovered tools."""
+    from pocketclaw.mcp.config import MCPServerConfig
+    from pocketclaw.mcp.manager import get_mcp_manager
+
+    data = await request.json()
+    config = MCPServerConfig(
+        name=data.get("name", "test"),
+        transport=data.get("transport", "stdio"),
+        command=data.get("command", ""),
+        args=data.get("args", []),
+        url=data.get("url", ""),
+        env=data.get("env", {}),
+    )
+
+    mgr = get_mcp_manager()
+    success = await mgr.start_server(config)
+    if not success:
+        status = mgr.get_server_status().get(config.name, {})
+        return {"connected": False, "error": status.get("error", "Unknown error"), "tools": []}
+
+    tools = mgr.discover_tools(config.name)
+    # Stop the test server
+    await mgr.stop_server(config.name)
+    return {
+        "connected": True,
+        "tools": [{"name": t.name, "description": t.description} for t in tools],
+    }
 
 
 # ==================== WhatsApp Webhook Routes ====================
@@ -311,6 +509,32 @@ _CHANNEL_CONFIG_KEYS: dict[str, dict[str, str]] = {
         "bot_token": "telegram_bot_token",
         "allowed_user_id": "allowed_user_id",
     },
+    "signal": {
+        "api_url": "signal_api_url",
+        "phone_number": "signal_phone_number",
+        "allowed_phone_numbers": "signal_allowed_phone_numbers",
+    },
+    "matrix": {
+        "homeserver": "matrix_homeserver",
+        "user_id": "matrix_user_id",
+        "access_token": "matrix_access_token",
+        "password": "matrix_password",
+        "allowed_room_ids": "matrix_allowed_room_ids",
+        "device_id": "matrix_device_id",
+    },
+    "teams": {
+        "app_id": "teams_app_id",
+        "app_password": "teams_app_password",
+        "allowed_tenant_ids": "teams_allowed_tenant_ids",
+        "webhook_port": "teams_webhook_port",
+    },
+    "google_chat": {
+        "mode": "gchat_mode",
+        "service_account_key": "gchat_service_account_key",
+        "project_id": "gchat_project_id",
+        "subscription_id": "gchat_subscription_id",
+        "allowed_space_ids": "gchat_allowed_space_ids",
+    },
 }
 
 # Required fields per channel (at least these must be set to start the adapter)
@@ -319,6 +543,10 @@ _CHANNEL_REQUIRED: dict[str, list[str]] = {
     "slack": ["slack_bot_token", "slack_app_token"],
     "whatsapp": ["whatsapp_access_token", "whatsapp_phone_number_id"],
     "telegram": ["telegram_bot_token"],
+    "signal": ["signal_phone_number"],
+    "matrix": ["matrix_homeserver", "matrix_user_id"],
+    "teams": ["teams_app_id", "teams_app_password"],
+    "google_chat": ["gchat_service_account_key"],
 }
 
 
@@ -346,10 +574,14 @@ async def get_channels_status():
     """Get status of all 4 channel adapters."""
     settings = Settings.load()
     result = {}
-    for channel in ("discord", "slack", "whatsapp", "telegram"):
-        result[channel] = {
-            "configured": _channel_is_configured(channel, settings),
-            "running": _channel_is_running(channel),
+    all_channels = (
+        "discord", "slack", "whatsapp", "telegram",
+        "signal", "matrix", "teams", "google_chat",
+    )
+    for ch in all_channels:
+        result[ch] = {
+            "configured": _channel_is_configured(ch, settings),
+            "running": _channel_is_running(ch),
         }
     # Add WhatsApp mode info
     result["whatsapp"]["mode"] = settings.whatsapp_mode
@@ -854,7 +1086,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str | None = Query(Non
     # Track connection
     active_connections.append(websocket)
 
-    # Generate session ID for Nanobot bus
+    # Generate session ID for bus
     chat_id = str(uuid.uuid4())
     await ws_adapter.register_connection(websocket, chat_id)
 
@@ -862,7 +1094,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str | None = Query(Non
     await websocket.send_json(
         {
             "type": "connection_info",
-            "content": "👋 Connected to PocketPaw (Nanobot V2)",
+            "content": "👋 Connected to PocketPaw",
             "id": chat_id,
         }
     )
@@ -878,7 +1110,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str | None = Query(Non
             data = await websocket.receive_json()
             action = data.get("action")
 
-            # Handle chat via MessageBus (Nanobot)
+            # Handle chat via MessageBus 
             if action == "chat":
                 log_msg = f"⚡ Processing message with Backend: {settings.agent_backend} (Provider: {settings.llm_provider})"
                 logger.warning(log_msg)  # Use WARNING to ensure it shows up
@@ -949,10 +1181,35 @@ async def websocket_endpoint(websocket: WebSocket, token: str | None = Query(Non
                     settings.self_audit_enabled = bool(data["self_audit_enabled"])
                 if data.get("self_audit_schedule"):
                     settings.self_audit_schedule = data["self_audit_schedule"]
+                # Memory settings
+                if data.get("memory_backend"):
+                    settings.memory_backend = data["memory_backend"]
+                if "mem0_auto_learn" in data:
+                    settings.mem0_auto_learn = bool(data["mem0_auto_learn"])
+                if data.get("mem0_llm_provider"):
+                    settings.mem0_llm_provider = data["mem0_llm_provider"]
+                if data.get("mem0_llm_model"):
+                    settings.mem0_llm_model = data["mem0_llm_model"]
+                if data.get("mem0_embedder_provider"):
+                    settings.mem0_embedder_provider = data["mem0_embedder_provider"]
+                if data.get("mem0_embedder_model"):
+                    settings.mem0_embedder_model = data["mem0_embedder_model"]
+                if data.get("mem0_vector_store"):
+                    settings.mem0_vector_store = data["mem0_vector_store"]
+                if data.get("mem0_ollama_base_url"):
+                    settings.mem0_ollama_base_url = data["mem0_ollama_base_url"]
                 settings.save()
 
                 # Reset the agent loop's router to pick up new settings
                 agent_loop.reset_router()
+
+                # Clear settings cache so memory manager picks up new values
+                from pocketclaw.config import get_settings as _get_settings
+
+                _get_settings.cache_clear()
+
+                # Reload memory manager with fresh settings
+                agent_loop.memory = get_memory_manager(force_reload=True)
 
                 await websocket.send_json({"type": "message", "content": "⚙️ Settings updated"})
 
@@ -1059,6 +1316,14 @@ async def websocket_endpoint(websocket: WebSocket, token: str | None = Query(Non
                             "ttsVoice": settings.tts_voice,
                             "selfAuditEnabled": settings.self_audit_enabled,
                             "selfAuditSchedule": settings.self_audit_schedule,
+                            "memoryBackend": settings.memory_backend,
+                            "mem0AutoLearn": settings.mem0_auto_learn,
+                            "mem0LlmProvider": settings.mem0_llm_provider,
+                            "mem0LlmModel": settings.mem0_llm_model,
+                            "mem0EmbedderProvider": settings.mem0_embedder_provider,
+                            "mem0EmbedderModel": settings.mem0_embedder_model,
+                            "mem0VectorStore": settings.mem0_vector_store,
+                            "mem0OllamaBaseUrl": settings.mem0_ollama_base_url,
                             "hasElevenlabsKey": bool(settings.elevenlabs_api_key),
                             "hasGoogleOAuthId": bool(settings.google_oauth_client_id),
                             "hasGoogleOAuthSecret": bool(settings.google_oauth_client_secret),
@@ -1482,6 +1747,83 @@ async def handle_file_browse(websocket: WebSocket, path: str, settings: Settings
         display_path = str(resolved_path)
 
     await websocket.send_json({"type": "files", "path": display_path, "files": files})
+
+
+# =========================================================================
+# Memory Settings API
+# =========================================================================
+
+_MEMORY_CONFIG_KEYS = {
+    "memory_backend": "memory_backend",
+    "memory_use_inference": "memory_use_inference",
+    "mem0_llm_provider": "mem0_llm_provider",
+    "mem0_llm_model": "mem0_llm_model",
+    "mem0_embedder_provider": "mem0_embedder_provider",
+    "mem0_embedder_model": "mem0_embedder_model",
+    "mem0_vector_store": "mem0_vector_store",
+    "mem0_ollama_base_url": "mem0_ollama_base_url",
+    "mem0_auto_learn": "mem0_auto_learn",
+}
+
+
+@app.get("/api/memory/settings")
+async def get_memory_settings():
+    """Get current memory backend configuration."""
+    settings = Settings.load()
+    return {
+        "memory_backend": settings.memory_backend,
+        "memory_use_inference": settings.memory_use_inference,
+        "mem0_llm_provider": settings.mem0_llm_provider,
+        "mem0_llm_model": settings.mem0_llm_model,
+        "mem0_embedder_provider": settings.mem0_embedder_provider,
+        "mem0_embedder_model": settings.mem0_embedder_model,
+        "mem0_vector_store": settings.mem0_vector_store,
+        "mem0_ollama_base_url": settings.mem0_ollama_base_url,
+        "mem0_auto_learn": settings.mem0_auto_learn,
+    }
+
+
+@app.post("/api/memory/settings")
+async def save_memory_settings(request: Request):
+    """Save memory backend configuration."""
+    data = await request.json()
+    settings = Settings.load()
+
+    for key, value in data.items():
+        settings_field = _MEMORY_CONFIG_KEYS.get(key)
+        if settings_field:
+            setattr(settings, settings_field, value)
+
+    settings.save()
+
+    # Clear settings cache so memory manager picks up new values
+    from pocketclaw.config import get_settings as _get_settings
+
+    _get_settings.cache_clear()
+
+    # Force reload the memory manager with fresh settings
+    from pocketclaw.memory import get_memory_manager
+
+    manager = get_memory_manager(force_reload=True)
+    agent_loop.memory = manager
+
+    return {"status": "ok"}
+
+
+@app.get("/api/memory/stats")
+async def get_memory_stats():
+    """Get memory backend statistics."""
+    manager = get_memory_manager()
+    store = manager._store
+
+    if hasattr(store, "get_memory_stats"):
+        return await store.get_memory_stats()
+
+    # File backend basic stats
+    return {
+        "backend": "file",
+        "total_memories": "N/A (use mem0 for stats)",
+    }
 
 
 def run_dashboard(host: str = "127.0.0.1", port: int = 8888):

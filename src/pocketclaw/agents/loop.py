@@ -1,6 +1,5 @@
 """Unified Agent Loop.
 Created: 2026-02-02
-Part of Nanobot Pattern Adoption.
 Changes:
   - Added BrowserTool registration
   - 2026-02-05: Refactored to use AgentRouter for all backends.
@@ -135,7 +134,7 @@ class AgentLoop:
             )
 
             # 2. Build dynamic system prompt (identity + memory context)
-            system_prompt = await self.context_builder.build_system_prompt()
+            system_prompt = await self.context_builder.build_system_prompt(user_query=content)
 
             # 2a. Retrieve session history with compaction
             history = await self.memory.get_compacted_history(
@@ -292,6 +291,12 @@ class AgentLoop:
                     session_key=session_key, role="assistant", content=full_response
                 )
 
+                # 6. Auto-learn: extract facts from conversation (mem0 only, non-blocking)
+                if self.settings.memory_backend == "mem0" and self.settings.mem0_auto_learn:
+                    asyncio.create_task(
+                        self._auto_learn(message.content, full_response, session_key)
+                    )
+
         except Exception as e:
             logger.exception(f"❌ Error processing message: {e}")
             # Send error message
@@ -314,6 +319,20 @@ class AgentLoop:
         await self.bus.publish_outbound(
             OutboundMessage(channel=original.channel, chat_id=original.chat_id, content=content)
         )
+
+    async def _auto_learn(self, user_msg: str, assistant_msg: str, session_key: str) -> None:
+        """Background task: feed conversation turn to mem0 for fact extraction."""
+        try:
+            messages = [
+                {"role": "user", "content": user_msg},
+                {"role": "assistant", "content": assistant_msg},
+            ]
+            result = await self.memory.auto_learn(messages)
+            extracted = len(result.get("results", []))
+            if extracted:
+                logger.debug("Auto-learned %d facts from %s", extracted, session_key)
+        except Exception:
+            logger.debug("Auto-learn background task failed", exc_info=True)
 
     def reset_router(self) -> None:
         """Reset the router to pick up new settings."""

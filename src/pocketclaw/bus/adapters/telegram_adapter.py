@@ -234,7 +234,7 @@ class TelegramAdapter(BaseChannelAdapter):
             return
 
         await update.message.reply_text(
-            "🐾 **PocketPaw (Nanobot)**\n\nI am listening. Just type to chat!",
+            "🐾 **PocketPaw**\n\nI am listening. Just type to chat!",
             parse_mode="Markdown",
         )
 

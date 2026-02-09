@@ -211,6 +211,137 @@ x-transition.opacity
 
     <hr class="border-t border-[var(--glass-border)] opacity-50" />
 
+    <h3 class="text-[14px] font-semibold text-[var(--text-secondary)]">Memory Backend</h3>
+
+    <!-- Memory Backend Selector -->
+    <div class="flex flex-col gap-2">
+        <label class="text-[13px] font-medium text-[var(--text-secondary)]">Backend</label>
+        <div class="relative">
+        <select
+            x-model="settings.memoryBackend"
+            @change="saveSettings()"
+            class="w-full appearance-none bg-black/30 border border-[var(--glass-border)] rounded-[10px] py-3 px-3.5 text-[14px] text-white focus:outline-none focus:border-[var(--accent-color)] focus:bg-black/40 transition-all"
+        >
+        <option value="file">File (Simple Markdown)</option>
+        <option value="mem0">Mem0 (Semantic Search + LLM)</option>
+        </select>
+        <div class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
+            <i data-lucide="chevron-down" class="w-4 h-4"></i>
+        </div>
+        </div>
+        <small class="text-white/40 text-xs" x-text="settings.memoryBackend === 'mem0' ? 'Uses LLM to extract and evolve facts. Requires mem0ai package.' : 'Simple append-only markdown files. No dependencies needed.'"></small>
+    </div>
+
+    <!-- Mem0 Options (shown when mem0 selected) -->
+    <div x-show="settings.memoryBackend === 'mem0'" x-transition class="flex flex-col gap-4 pl-2 border-l-2 border-[var(--accent-color)]/30 ml-1">
+
+        <!-- Auto-Learn -->
+        <div class="flex flex-col gap-2">
+            <label class="flex items-start gap-3 cursor-pointer group">
+            <input type="checkbox" x-model="settings.mem0AutoLearn" @change="saveSettings()" class="mt-0.5 accent-[var(--accent-color)] w-4 h-4">
+            <div class="flex flex-col">
+                <span class="text-[14px] font-medium group-hover:text-white transition-colors">Auto-Learn</span>
+                <span class="text-xs text-white/40 mt-0.5">Automatically extract facts from every conversation</span>
+            </div>
+            </label>
+        </div>
+
+        <!-- LLM Provider for Mem0 -->
+        <div class="flex flex-col gap-2">
+            <label class="text-[13px] font-medium text-[var(--text-secondary)]">Mem0 LLM Provider</label>
+            <div class="relative">
+            <select
+                x-model="settings.mem0LlmProvider"
+                @change="saveSettings()"
+                class="w-full appearance-none bg-black/30 border border-[var(--glass-border)] rounded-[10px] py-3 px-3.5 text-[14px] text-white focus:outline-none focus:border-[var(--accent-color)] focus:bg-black/40 transition-all"
+            >
+            <option value="anthropic">Anthropic</option>
+            <option value="openai">OpenAI</option>
+            <option value="ollama">Ollama (Local)</option>
+            </select>
+            <div class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
+                <i data-lucide="chevron-down" class="w-4 h-4"></i>
+            </div>
+            </div>
+            <small class="text-white/40 text-xs">LLM used for fact extraction and memory consolidation</small>
+        </div>
+
+        <!-- LLM Model -->
+        <div class="flex flex-col gap-2">
+            <label class="text-[13px] font-medium text-[var(--text-secondary)]">Mem0 LLM Model</label>
+            <input
+                type="text"
+                x-model="settings.mem0LlmModel"
+                @change="saveSettings()"
+                placeholder="claude-haiku-4-5-20251001"
+                class="w-full bg-black/30 border border-[var(--glass-border)] rounded-[10px] py-2.5 px-3.5 text-[14px] text-white focus:outline-none focus:border-[var(--accent-color)] focus:bg-black/40 transition-all placeholder-white/20"
+            />
+        </div>
+
+        <!-- Embedder Provider -->
+        <div class="flex flex-col gap-2">
+            <label class="text-[13px] font-medium text-[var(--text-secondary)]">Embedder Provider</label>
+            <div class="relative">
+            <select
+                x-model="settings.mem0EmbedderProvider"
+                @change="saveSettings()"
+                class="w-full appearance-none bg-black/30 border border-[var(--glass-border)] rounded-[10px] py-3 px-3.5 text-[14px] text-white focus:outline-none focus:border-[var(--accent-color)] focus:bg-black/40 transition-all"
+            >
+            <option value="openai">OpenAI</option>
+            <option value="ollama">Ollama (Local)</option>
+            <option value="huggingface">HuggingFace</option>
+            </select>
+            <div class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
+                <i data-lucide="chevron-down" class="w-4 h-4"></i>
+            </div>
+            </div>
+        </div>
+
+        <!-- Embedder Model -->
+        <div class="flex flex-col gap-2">
+            <label class="text-[13px] font-medium text-[var(--text-secondary)]">Embedder Model</label>
+            <input
+                type="text"
+                x-model="settings.mem0EmbedderModel"
+                @change="saveSettings()"
+                placeholder="text-embedding-3-small"
+                class="w-full bg-black/30 border border-[var(--glass-border)] rounded-[10px] py-2.5 px-3.5 text-[14px] text-white focus:outline-none focus:border-[var(--accent-color)] focus:bg-black/40 transition-all placeholder-white/20"
+            />
+        </div>
+
+        <!-- Vector Store -->
+        <div class="flex flex-col gap-2">
+            <label class="text-[13px] font-medium text-[var(--text-secondary)]">Vector Store</label>
+            <div class="relative">
+            <select
+                x-model="settings.mem0VectorStore"
+                @change="saveSettings()"
+                class="w-full appearance-none bg-black/30 border border-[var(--glass-border)] rounded-[10px] py-3 px-3.5 text-[14px] text-white focus:outline-none focus:border-[var(--accent-color)] focus:bg-black/40 transition-all"
+            >
+            <option value="qdrant">Qdrant (Default)</option>
+            <option value="chroma">ChromaDB</option>
+            </select>
+            <div class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
+                <i data-lucide="chevron-down" class="w-4 h-4"></i>
+            </div>
+            </div>
+        </div>
+
+        <!-- Ollama Base URL (shown when ollama is selected for LLM or embedder) -->
+        <div class="flex flex-col gap-2" x-show="settings.mem0LlmProvider === 'ollama' || settings.mem0EmbedderProvider === 'ollama'" x-transition>
+            <label class="text-[13px] font-medium text-[var(--text-secondary)]">Ollama Base URL</label>
+            <input
+                type="text"
+                x-model="settings.mem0OllamaBaseUrl"
+                @change="saveSettings()"
+                placeholder="http://localhost:11434"
+                class="w-full bg-black/30 border border-[var(--glass-border)] rounded-[10px] py-2.5 px-3.5 text-[14px] text-white focus:outline-none focus:border-[var(--accent-color)] focus:bg-black/40 transition-all placeholder-white/20"
+            />
+        </div>
+    </div>
+
+    <hr class="border-t border-[var(--glass-border)] opacity-50" />
+
     <h3 class="text-[14px] font-semibold text-[var(--text-secondary)]">API Keys</h3>
     
     <!-- API Key Input -->

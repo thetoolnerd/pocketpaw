@@ -72,6 +72,36 @@ class Settings(BaseSettings):
         default=True, description="Use LLM to extract facts from memories (only for mem0 backend)"
     )
 
+    # Mem0 Configuration
+    mem0_llm_provider: str = Field(
+        default="anthropic",
+        description="LLM provider for mem0 fact extraction: 'anthropic', 'openai', or 'ollama'",
+    )
+    mem0_llm_model: str = Field(
+        default="claude-haiku-4-5-20251001",
+        description="LLM model for mem0 fact extraction",
+    )
+    mem0_embedder_provider: str = Field(
+        default="openai",
+        description="Embedder provider for mem0 vectors: 'openai', 'ollama', or 'huggingface'",
+    )
+    mem0_embedder_model: str = Field(
+        default="text-embedding-3-small",
+        description="Embedding model for mem0 vector search",
+    )
+    mem0_vector_store: str = Field(
+        default="qdrant",
+        description="Vector store for mem0: 'qdrant' or 'chroma'",
+    )
+    mem0_ollama_base_url: str = Field(
+        default="http://localhost:11434",
+        description="Ollama base URL for mem0 (when using ollama provider)",
+    )
+    mem0_auto_learn: bool = Field(
+        default=True,
+        description="Automatically extract facts from conversations into long-term memory",
+    )
+
     # Session History Compaction
     compaction_recent_window: int = Field(
         default=10, description="Number of recent messages to keep verbatim"
@@ -219,6 +249,68 @@ class Settings(BaseSettings):
         default="alloy", description="TTS voice name (OpenAI: alloy/echo/fable/onyx/nova/shimmer)"
     )
 
+    # Signal
+    signal_api_url: str = Field(
+        default="http://localhost:8080", description="Signal-cli REST API URL"
+    )
+    signal_phone_number: str | None = Field(
+        default=None, description="Signal phone number (e.g. +1234567890)"
+    )
+    signal_allowed_phone_numbers: list[str] = Field(
+        default_factory=list, description="Signal phone numbers allowed to use the bot"
+    )
+
+    # Matrix
+    matrix_homeserver: str | None = Field(
+        default=None, description="Matrix homeserver URL (e.g. https://matrix.org)"
+    )
+    matrix_user_id: str | None = Field(
+        default=None, description="Matrix user ID (e.g. @bot:matrix.org)"
+    )
+    matrix_access_token: str | None = Field(
+        default=None, description="Matrix access token"
+    )
+    matrix_password: str | None = Field(
+        default=None, description="Matrix password (alternative to access token)"
+    )
+    matrix_allowed_room_ids: list[str] = Field(
+        default_factory=list, description="Matrix room IDs allowed to use the bot"
+    )
+    matrix_device_id: str = Field(
+        default="POCKETPAW", description="Matrix device ID"
+    )
+
+    # Microsoft Teams
+    teams_app_id: str | None = Field(
+        default=None, description="Microsoft Teams App ID"
+    )
+    teams_app_password: str | None = Field(
+        default=None, description="Microsoft Teams App Password"
+    )
+    teams_allowed_tenant_ids: list[str] = Field(
+        default_factory=list, description="Allowed Azure AD tenant IDs"
+    )
+    teams_webhook_port: int = Field(
+        default=3978, description="Teams webhook listener port"
+    )
+
+    # Google Chat
+    gchat_mode: str = Field(
+        default="webhook", description="Google Chat mode: 'webhook' or 'pubsub'"
+    )
+    gchat_service_account_key: str | None = Field(
+        default=None, description="Path to Google service account JSON key file"
+    )
+    gchat_project_id: str | None = Field(
+        default=None, description="Google Cloud project ID for Pub/Sub mode"
+    )
+    gchat_subscription_id: str | None = Field(
+        default=None, description="Pub/Sub subscription ID"
+    )
+    gchat_allowed_space_ids: list[str] = Field(
+        default_factory=list, description="Google Chat space IDs allowed to use the bot"
+    )
+
     # Web Server
     web_host: str = Field(default="127.0.0.1", description="Web server host")
     web_port: int = Field(default=8888, description="Web server port")
@@ -244,6 +336,13 @@ class Settings(BaseSettings):
             "agent_backend": self.agent_backend,
             "memory_backend": self.memory_backend,
             "memory_use_inference": self.memory_use_inference,
+            "mem0_llm_provider": self.mem0_llm_provider,
+            "mem0_llm_model": self.mem0_llm_model,
+            "mem0_embedder_provider": self.mem0_embedder_provider,
+            "mem0_embedder_model": self.mem0_embedder_model,
+            "mem0_vector_store": self.mem0_vector_store,
+            "mem0_ollama_base_url": self.mem0_ollama_base_url,
+            "mem0_auto_learn": self.mem0_auto_learn,
             "compaction_recent_window": self.compaction_recent_window,
             "compaction_char_budget": self.compaction_char_budget,
             "compaction_summary_chars": self.compaction_summary_chars,
@@ -317,6 +416,34 @@ class Settings(BaseSettings):
             "tts_provider": self.tts_provider,
             "elevenlabs_api_key": (self.elevenlabs_api_key or existing.get("elevenlabs_api_key")),
             "tts_voice": self.tts_voice,
+            # Signal
+            "signal_api_url": self.signal_api_url,
+            "signal_phone_number": self.signal_phone_number,
+            "signal_allowed_phone_numbers": self.signal_allowed_phone_numbers,
+            # Matrix
+            "matrix_homeserver": self.matrix_homeserver,
+            "matrix_user_id": self.matrix_user_id,
+            "matrix_access_token": (
+                self.matrix_access_token or existing.get("matrix_access_token")
+            ),
+            "matrix_password": self.matrix_password or existing.get("matrix_password"),
+            "matrix_allowed_room_ids": self.matrix_allowed_room_ids,
+            "matrix_device_id": self.matrix_device_id,
+            # Teams
+            "teams_app_id": self.teams_app_id or existing.get("teams_app_id"),
+            "teams_app_password": (
+                self.teams_app_password or existing.get("teams_app_password")
+            ),
+            "teams_allowed_tenant_ids": self.teams_allowed_tenant_ids,
+            "teams_webhook_port": self.teams_webhook_port,
+            # Google Chat
+            "gchat_mode": self.gchat_mode,
+            "gchat_service_account_key": (
+                self.gchat_service_account_key or existing.get("gchat_service_account_key")
+            ),
+            "gchat_project_id": self.gchat_project_id,
+            "gchat_subscription_id": self.gchat_subscription_id,
+            "gchat_allowed_space_ids": self.gchat_allowed_space_ids,
         }
         config_path.write_text(json.dumps(data, indent=2))
 

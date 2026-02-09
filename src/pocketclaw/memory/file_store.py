@@ -1,6 +1,5 @@
 # File-based memory store implementation.
-# Created: 2026-02-02
-# Part of Nanobot Pattern Adoption - Memory System
+# Created: 2026-02-02 - Memory System
 #
 # Stores memories as markdown files for human readability:
 # - ~/.pocketclaw/memory/MEMORY.md     (long-term)

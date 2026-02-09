@@ -24,13 +24,21 @@ window.PocketPaw.Channels = {
                 discord: { configured: false, running: false },
                 slack: { configured: false, running: false },
                 whatsapp: { configured: false, running: false, mode: 'personal' },
-                telegram: { configured: false, running: false }
+                telegram: { configured: false, running: false },
+                signal: { configured: false, running: false },
+                matrix: { configured: false, running: false },
+                teams: { configured: false, running: false },
+                google_chat: { configured: false, running: false }
             },
             channelForms: {
                 discord: { bot_token: '' },
                 slack: { bot_token: '', app_token: '' },
                 whatsapp: { access_token: '', phone_number_id: '', verify_token: '' },
-                telegram: { bot_token: '' }
+                telegram: { bot_token: '' },
+                signal: { api_url: '', phone_number: '' },
+                matrix: { homeserver: '', user_id: '', access_token: '' },
+                teams: { app_id: '', app_password: '' },
+                google_chat: { service_account_key: '', project_id: '', subscription_id: '', _mode: 'webhook' }
             },
             channelLoading: false,
             // WhatsApp personal mode QR state
@@ -45,6 +53,23 @@ window.PocketPaw.Channels = {
      */
     getMethods() {
         return {
+            /**
+             * Display name for channel tabs
+             */
+            channelDisplayName(tab) {
+                const names = {
+                    discord: 'Discord',
+                    slack: 'Slack',
+                    whatsapp: 'WhatsApp',
+                    telegram: 'Telegram',
+                    signal: 'Signal',
+                    matrix: 'Matrix',
+                    teams: 'Teams',
+                    google_chat: 'GChat'
+                };
+                return names[tab] || tab;
+            },
+
             /**
              * Open Channels modal and fetch status
              */
