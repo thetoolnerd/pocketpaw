@@ -12,7 +12,6 @@ import logging
 from typing import AsyncIterator
 
 from pocketclaw.config import Settings
-from pocketclaw.agents.open_interpreter import OpenInterpreterAgent
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +60,8 @@ class AgentRouter:
             logger.info("🧠 [bold blue]PocketPaw Native[/] ─ Anthropic + Open Interpreter")
 
         elif backend == "open_interpreter":
+            from pocketclaw.agents.open_interpreter import OpenInterpreterAgent
+
             self._agent = OpenInterpreterAgent(self.settings)
             logger.info("🤖 [bold yellow]Open Interpreter[/] ─ Local/Cloud LLMs")
 

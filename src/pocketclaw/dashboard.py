@@ -20,13 +20,19 @@ import logging
 import uuid
 from pathlib import Path
 
-import qrcode
-import uvicorn
-from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+try:
+    import qrcode
+    import uvicorn
+    from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+    from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.responses import StreamingResponse
+    from fastapi.staticfiles import StaticFiles
+    from fastapi.templating import Jinja2Templates
+except ImportError as _exc:
+    raise ImportError(
+        "Dashboard dependencies (fastapi, uvicorn, qrcode, jinja2) are required "
+        "but not installed. Install them with: pip install 'pocketpaw[dashboard]'"
+    ) from _exc
 
 from pocketclaw.agents.loop import AgentLoop
 from pocketclaw.bootstrap import DefaultBootstrapProvider
@@ -51,6 +57,9 @@ active_connections: list[WebSocket] = []
 
 # Channel adapters (auto-started when configured, keyed by channel name)
 _channel_adapters: dict[str, object] = {}
+
+# Set by run_dashboard() so the startup event can open the browser once the server is ready
+_open_browser_url: str | None = None
 
 # Get frontend directory
 FRONTEND_DIR = Path(__file__).parent / "frontend"
@@ -313,6 +322,12 @@ async def startup_event():
     # Start proactive daemon
     daemon = get_daemon()
     daemon.start(stream_callback=broadcast_intention)
+
+    # Open browser now that the server is actually listening
+    if _open_browser_url:
+        import webbrowser
+
+        webbrowser.open(_open_browser_url)
 
 
 @app.on_event("shutdown")
@@ -2182,12 +2197,17 @@ async def get_memory_stats():
     }
 
 
-def run_dashboard(host: str = "127.0.0.1", port: int = 8888):
+def run_dashboard(host: str = "127.0.0.1", port: int = 8888, open_browser: bool = True):
     """Run the dashboard server."""
+    global _open_browser_url
+
     print("\n" + "=" * 50)
     print("🐾 POCKETPAW WEB DASHBOARD")
     print("=" * 50)
     print(f"\n🌐 Open http://localhost:{port} in your browser\n")
+
+    if open_browser:
+        _open_browser_url = f"http://localhost:{port}"
 
     uvicorn.run(app, host=host, port=port)
 

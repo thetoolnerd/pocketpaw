@@ -2826,49 +2826,119 @@ dependencies = [
     { name = "anthropic" },
     { name = "apscheduler" },
     { name = "claude-agent-sdk" },
-    { name = "fastapi" },
     { name = "httpx" },
-    { name = "jinja2" },
-    { name = "mem0ai" },
-    { name = "ollama" },
-    { name = "open-interpreter" },
     { name = "openai" },
     { name = "pillow" },
-    { name = "playwright" },
-    { name = "psutil" },
-    { name = "pyautogui" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "python-dateutil" },
-    { name = "python-multipart" },
-    { name = "python-telegram-bot" },
-    { name = "qrcode", extra = ["pil"] },
     { name = "rich" },
-    { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.optional-dependencies]
 all = [
+    { name = "botbuilder-core" },
+    { name = "botbuilder-integration-aiohttp" },
     { name = "discord-py" },
+    { name = "elevenlabs" },
+    { name = "fastapi" },
+    { name = "google-api-python-client" },
+    { name = "google-auth" },
+    { name = "google-genai" },
+    { name = "html2text" },
+    { name = "jinja2" },
+    { name = "matrix-nio" },
+    { name = "mcp" },
+    { name = "mem0ai" },
+    { name = "neonize" },
+    { name = "ollama" },
+    { name = "open-interpreter" },
+    { name = "playwright" },
+    { name = "psutil" },
+    { name = "pyautogui" },
+    { name = "pytesseract" },
+    { name = "python-multipart" },
+    { name = "python-telegram-bot" },
+    { name = "qrcode", extra = ["pil"] },
+    { name = "slack-bolt" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+all-backends = [
+    { name = "open-interpreter" },
+]
+all-channels = [
+    { name = "botbuilder-core" },
+    { name = "botbuilder-integration-aiohttp" },
+    { name = "discord-py" },
+    { name = "google-api-python-client" },
+    { name = "google-auth" },
+    { name = "matrix-nio" },
+    { name = "neonize" },
+    { name = "python-telegram-bot" },
+    { name = "slack-bolt" },
+]
+all-tools = [
     { name = "elevenlabs" },
     { name = "google-genai" },
     { name = "html2text" },
     { name = "mcp" },
     { name = "mem0ai" },
-    { name = "neonize" },
+    { name = "ollama" },
+    { name = "playwright" },
+    { name = "psutil" },
+    { name = "pyautogui" },
     { name = "pytesseract" },
-    { name = "slack-bolt" },
+]
+browser = [
+    { name = "playwright" },
 ]
 channels = [
     { name = "discord-py" },
+    { name = "python-telegram-bot" },
     { name = "slack-bolt" },
 ]
+dashboard = [
+    { name = "fastapi" },
+    { name = "jinja2" },
+    { name = "python-multipart" },
+    { name = "qrcode", extra = ["pil"] },
+    { name = "uvicorn", extra = ["standard"] },
+]
+desktop = [
+    { name = "psutil" },
+    { name = "pyautogui" },
+]
 dev = [
+    { name = "botbuilder-core" },
+    { name = "botbuilder-integration-aiohttp" },
+    { name = "discord-py" },
+    { name = "elevenlabs" },
+    { name = "fastapi" },
+    { name = "google-api-python-client" },
+    { name = "google-auth" },
+    { name = "google-genai" },
+    { name = "html2text" },
+    { name = "jinja2" },
+    { name = "matrix-nio" },
+    { name = "mcp" },
+    { name = "mem0ai" },
     { name = "mypy" },
+    { name = "neonize" },
+    { name = "ollama" },
+    { name = "open-interpreter" },
+    { name = "playwright" },
+    { name = "psutil" },
+    { name = "pyautogui" },
+    { name = "pytesseract" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-playwright" },
+    { name = "python-multipart" },
+    { name = "python-telegram-bot" },
+    { name = "qrcode", extra = ["pil"] },
     { name = "ruff" },
+    { name = "slack-bolt" },
+    { name = "uvicorn", extra = ["standard"] },
 ]
 discord = [
     { name = "discord-py" },
@@ -2891,9 +2961,25 @@ mcp = [
 ]
 memory = [
     { name = "mem0ai" },
+    { name = "ollama" },
+]
+native = [
+    { name = "open-interpreter" },
 ]
 ocr = [
     { name = "pytesseract" },
+]
+recommended = [
+    { name = "fastapi" },
+    { name = "jinja2" },
+    { name = "mem0ai" },
+    { name = "ollama" },
+    { name = "playwright" },
+    { name = "psutil" },
+    { name = "pyautogui" },
+    { name = "python-multipart" },
+    { name = "qrcode", extra = ["pil"] },
+    { name = "uvicorn", extra = ["standard"] },
 ]
 slack = [
     { name = "slack-bolt" },
@@ -2901,6 +2987,9 @@ slack = [
 teams = [
     { name = "botbuilder-core" },
     { name = "botbuilder-integration-aiohttp" },
+]
+telegram = [
+    { name = "python-telegram-bot" },
 ]
 voice = [
     { name = "elevenlabs" },
@@ -2912,6 +3001,7 @@ whatsapp-personal = [
 [package.dev-dependencies]
 dev = [
     { name = "mypy" },
+    { name = "pocketpaw", extra = ["all"] },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "ruff" },
@@ -2926,28 +3016,32 @@ requires-dist = [
     { name = "claude-agent-sdk", specifier = ">=0.1.30" },
     { name = "discord-py", marker = "extra == 'discord'", specifier = ">=2.3.0" },
     { name = "elevenlabs", marker = "extra == 'voice'", specifier = ">=1.0.0" },
-    { name = "fastapi", specifier = ">=0.109.0" },
+    { name = "fastapi", marker = "extra == 'dashboard'", specifier = ">=0.109.0" },
     { name = "google-api-python-client", marker = "extra == 'gchat'", specifier = ">=2.100.0" },
     { name = "google-auth", marker = "extra == 'gchat'", specifier = ">=2.25.0" },
     { name = "google-genai", marker = "extra == 'image'", specifier = ">=1.0.0" },
     { name = "html2text", marker = "extra == 'extract'", specifier = ">=2020.1.16" },
     { name = "httpx", specifier = ">=0.26.0" },
-    { name = "jinja2", specifier = ">=3.1.0" },
+    { name = "jinja2", marker = "extra == 'dashboard'", specifier = ">=3.1.0" },
     { name = "matrix-nio", marker = "extra == 'matrix'", specifier = ">=0.24.0" },
     { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.0.0" },
-    { name = "mem0ai", specifier = ">=0.1.115" },
-    { name = "mem0ai", marker = "extra == 'memory'", specifier = ">=0.1.0" },
+    { name = "mem0ai", marker = "extra == 'memory'", specifier = ">=0.1.115" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8.0" },
     { name = "neonize", marker = "extra == 'whatsapp-personal'", specifier = ">=0.3.0" },
-    { name = "ollama", specifier = ">=0.6.1" },
-    { name = "open-interpreter", specifier = ">=0.2.0,<0.5.0" },
+    { name = "ollama", marker = "extra == 'memory'", specifier = ">=0.6.1" },
+    { name = "open-interpreter", marker = "extra == 'native'", specifier = ">=0.2.0,<0.5.0" },
     { name = "openai", specifier = ">=1.60.0" },
     { name = "pillow", specifier = ">=10.0.0" },
-    { name = "playwright", specifier = ">=1.50.0" },
-    { name = "pocketpaw", extras = ["discord", "slack"], marker = "extra == 'channels'" },
-    { name = "pocketpaw", extras = ["memory", "channels", "whatsapp-personal", "image", "extract", "voice", "ocr", "mcp"], marker = "extra == 'all'" },
-    { name = "psutil", specifier = ">=5.9.0" },
-    { name = "pyautogui", specifier = ">=0.9.54" },
+    { name = "playwright", marker = "extra == 'browser'", specifier = ">=1.50.0" },
+    { name = "pocketpaw", extras = ["all"], marker = "extra == 'dev'" },
+    { name = "pocketpaw", extras = ["browser", "desktop", "image", "extract", "voice", "ocr", "mcp", "memory"], marker = "extra == 'all-tools'" },
+    { name = "pocketpaw", extras = ["dashboard", "browser", "memory", "desktop"], marker = "extra == 'recommended'" },
+    { name = "pocketpaw", extras = ["discord", "slack", "telegram"], marker = "extra == 'channels'" },
+    { name = "pocketpaw", extras = ["native"], marker = "extra == 'all-backends'" },
+    { name = "pocketpaw", extras = ["recommended", "all-channels", "all-tools", "all-backends"], marker = "extra == 'all'" },
+    { name = "pocketpaw", extras = ["telegram", "discord", "slack", "whatsapp-personal", "matrix", "teams", "gchat"], marker = "extra == 'all-channels'" },
+    { name = "psutil", marker = "extra == 'desktop'", specifier = ">=5.9.0" },
+    { name = "pyautogui", marker = "extra == 'desktop'", specifier = ">=0.9.54" },
     { name = "pydantic", specifier = ">=2.10.0" },
     { name = "pydantic-settings", specifier = ">=2.1.0" },
     { name = "pytesseract", marker = "extra == 'ocr'", specifier = ">=0.3.10" },
@@ -2955,19 +3049,20 @@ requires-dist = [
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
     { name = "pytest-playwright", marker = "extra == 'dev'", specifier = ">=0.4.0" },
     { name = "python-dateutil", specifier = ">=2.8.0" },
-    { name = "python-multipart", specifier = ">=0.0.22" },
-    { name = "python-telegram-bot", specifier = ">=21.0" },
-    { name = "qrcode", extras = ["pil"], specifier = ">=7.4" },
+    { name = "python-multipart", marker = "extra == 'dashboard'", specifier = ">=0.0.22" },
+    { name = "python-telegram-bot", marker = "extra == 'telegram'", specifier = ">=21.0" },
+    { name = "qrcode", extras = ["pil"], marker = "extra == 'dashboard'", specifier = ">=7.4" },
     { name = "rich", specifier = ">=13.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4.0" },
     { name = "slack-bolt", marker = "extra == 'slack'", specifier = ">=1.20.0" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.27.0" },
+    { name = "uvicorn", extras = ["standard"], marker = "extra == 'dashboard'", specifier = ">=0.27.0" },
 ]
-provides-extras = ["dev", "memory", "discord", "slack", "whatsapp-personal", "image", "extract", "voice", "ocr", "mcp", "matrix", "teams", "gchat", "channels", "all"]
+provides-extras = ["dashboard", "telegram", "browser", "desktop", "native", "memory", "discord", "slack", "whatsapp-personal", "matrix", "teams", "gchat", "image", "extract", "voice", "ocr", "mcp", "recommended", "channels", "all-channels", "all-tools", "all-backends", "all", "dev"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "mypy", specifier = ">=1.8.0" },
+    { name = "pocketpaw", extras = ["all"] },
     { name = "pytest", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", specifier = ">=0.23.0" },
     { name = "ruff", specifier = ">=0.4.0" },

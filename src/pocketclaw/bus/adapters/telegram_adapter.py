@@ -7,14 +7,20 @@ import asyncio
 import logging
 from typing import Any
 
-from telegram import Update
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    ContextTypes,
-    MessageHandler,
-    filters,
-)
+try:
+    from telegram import Update
+    from telegram.ext import (
+        Application,
+        CommandHandler,
+        ContextTypes,
+        MessageHandler,
+        filters,
+    )
+except ImportError as _exc:
+    raise ImportError(
+        "'python-telegram-bot' is required but not installed. "
+        "Install it with: pip install 'pocketpaw[telegram]'"
+    ) from _exc
 
 from pocketclaw.bus import (
     BaseChannelAdapter,
