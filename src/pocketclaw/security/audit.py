@@ -13,6 +13,7 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
+from collections.abc import Callable
 from typing import Any, Optional
 
 from pocketclaw.config import get_settings
@@ -80,11 +81,23 @@ class AuditLogger:
             base_dir.mkdir(parents=True, exist_ok=True)
             self.log_path = base_dir / "audit.jsonl"
 
+        self._callbacks: list[Callable[[dict], None]] = []
+
+    def on_log(self, callback: Callable[[dict], None]) -> None:
+        """Register a callback to be called after each audit log write."""
+        self._callbacks.append(callback)
+
     def log(self, event: AuditEvent) -> None:
         """Write an event to the audit log."""
         try:
+            event_dict = asdict(event)
             with open(self.log_path, "a", encoding="utf-8") as f:
-                f.write(json.dumps(asdict(event)) + "\n")
+                f.write(json.dumps(event_dict) + "\n")
+            for cb in self._callbacks:
+                try:
+                    cb(event_dict)
+                except Exception:
+                    pass
         except Exception as e:
             # Fallback to system logger if audit fails (critical failure)
             logger.critical(f"FAILED TO WRITE AUDIT LOG: {e} | Event: {event}")

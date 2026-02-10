@@ -200,6 +200,15 @@ trap cleanup EXIT INT TERM
 
 INSTALLER_URL="https://raw.githubusercontent.com/pocketpaw/pocketpaw/dev/installer/installer.py"
 
+if command -v curl >/dev/null 2>&1; then
+    DOWNLOAD="curl -fsSL"
+elif command -v wget >/dev/null 2>&1; then
+    DOWNLOAD="wget -qO-"
+else
+    printf '\033[31mError:\033[0m Neither curl nor wget found.\n'
+    exit 1
+fi
+
 printf '  Downloading installer...\n'
 if ! $DOWNLOAD "$INSTALLER_URL" > "$INSTALLER" 2>/dev/null; then
     printf '\033[33mWarn:\033[0m Primary download failed, trying fallback...\n'

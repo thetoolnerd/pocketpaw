@@ -113,6 +113,17 @@ async def broadcast_intention(intention_id: str, chunk: dict):
                 active_connections.remove(ws)
 
 
+async def _broadcast_audit_entry(entry: dict):
+    """Broadcast a new audit log entry to all connected WebSocket clients."""
+    message = {"type": "system_event", "event_type": "audit_entry", "data": entry}
+    for ws in active_connections[:]:
+        try:
+            await ws.send_json(message)
+        except Exception:
+            if ws in active_connections:
+                active_connections.remove(ws)
+
+
 async def _start_channel_adapter(channel: str, settings: Settings | None = None) -> bool:
     """Start a single channel adapter. Returns True on success."""
     if settings is None:
@@ -315,6 +326,10 @@ async def startup_event():
         await mcp.start_enabled_servers()
     except Exception as e:
         logger.warning("Failed to start MCP servers: %s", e)
+
+    # Register audit log callback for live updates
+    audit_logger = get_audit_logger()
+    audit_logger.on_log(lambda entry: asyncio.ensure_future(_broadcast_audit_entry(entry)))
 
     # Start reminder scheduler
     scheduler = get_scheduler()
@@ -2174,9 +2189,24 @@ async def get_long_term_memory(limit: int = 50):
     # I'll rely on a new Manager method or _store for now to keep it simple.
     items = await manager._store.get_by_type(MemoryType.LONG_TERM, limit=limit)
     return [
-        {"content": item.content, "timestamp": item.timestamp.isoformat(), "tags": item.tags}
+        {
+            "id": item.id,
+            "content": item.content,
+            "timestamp": item.created_at.isoformat(),
+            "tags": item.tags,
+        }
         for item in items
     ]
+
+
+@app.delete("/api/memory/long_term/{entry_id}")
+async def delete_long_term_memory(entry_id: str):
+    """Delete a long-term memory entry by ID."""
+    manager = get_memory_manager()
+    deleted = await manager._store.delete(entry_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Memory entry not found")
+    return {"ok": True}
 
 
 @app.get("/api/audit")
@@ -2205,6 +2235,109 @@ async def get_audit_log(limit: int = 50):
         return {"error": str(e)}
 
     return logs
+
+
+@app.post("/api/security-audit")
+async def run_security_audit_endpoint():
+    """Run security audit checks and return results."""
+    from pocketclaw.security.audit_cli import (
+        _check_audit_log,
+        _check_bypass_permissions,
+        _check_config_permissions,
+        _check_file_jail,
+        _check_guardian_reachable,
+        _check_plaintext_api_keys,
+        _check_tool_profile,
+    )
+
+    checks = [
+        ("Config file permissions", _check_config_permissions),
+        ("Plaintext API keys", _check_plaintext_api_keys),
+        ("Audit log", _check_audit_log),
+        ("Guardian agent", _check_guardian_reachable),
+        ("File jail", _check_file_jail),
+        ("Tool profile", _check_tool_profile),
+        ("Bypass permissions", _check_bypass_permissions),
+    ]
+
+    results = []
+    issues = 0
+    for label, fn in checks:
+        try:
+            ok, message, fixable = fn()
+            results.append(
+                {
+                    "check": label,
+                    "passed": ok,
+                    "message": message,
+                    "fixable": fixable,
+                }
+            )
+            if not ok:
+                issues += 1
+        except Exception as e:
+            results.append(
+                {
+                    "check": label,
+                    "passed": False,
+                    "message": str(e),
+                    "fixable": False,
+                }
+            )
+            issues += 1
+
+    total = len(results)
+    return {"total": total, "passed": total - issues, "issues": issues, "results": results}
+
+
+@app.get("/api/self-audit/reports")
+async def get_self_audit_reports():
+    """List recent self-audit reports."""
+    from pocketclaw.config import get_config_dir
+
+    reports_dir = get_config_dir() / "audit_reports"
+    if not reports_dir.exists():
+        return []
+
+    import json
+
+    reports = []
+    for f in sorted(reports_dir.glob("*.json"), reverse=True)[:20]:
+        try:
+            data = json.loads(f.read_text())
+            reports.append(
+                {
+                    "date": f.stem,
+                    "total": data.get("total_checks", 0),
+                    "passed": data.get("passed", 0),
+                    "issues": data.get("issues", 0),
+                }
+            )
+        except Exception:
+            pass
+    return reports
+
+
+@app.get("/api/self-audit/reports/{date}")
+async def get_self_audit_report(date: str):
+    """Get a specific self-audit report by date."""
+    import json
+
+    from pocketclaw.config import get_config_dir
+
+    report_path = get_config_dir() / "audit_reports" / f"{date}.json"
+    if not report_path.exists():
+        raise HTTPException(status_code=404, detail="Report not found")
+    return json.loads(report_path.read_text())
+
+
+@app.post("/api/self-audit/run")
+async def run_self_audit_endpoint():
+    """Trigger a self-audit run and return the report."""
+    from pocketclaw.daemon.self_audit import run_self_audit
+
+    report = await run_self_audit()
+    return report
 
 
 async def handle_tool(websocket: WebSocket, tool: str, settings: Settings, data: dict):

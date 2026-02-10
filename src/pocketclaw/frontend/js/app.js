@@ -71,10 +71,10 @@ function app() {
 
         // System status
         status: {
-            cpu: '—',
-            ram: '—',
-            disk: '—',
-            battery: '—'
+            cpu: '...',
+            ram: '...',
+            disk: '...',
+            battery: '...'
         },
 
         // Settings

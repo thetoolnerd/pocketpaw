@@ -41,7 +41,16 @@ window.PocketPaw.Transparency = {
 
             // Activity log (for system events)
             activityLog: [],
-            sessionId: null
+            sessionId: null,
+
+            // Security audit
+            securityAuditResults: null,
+            securityAuditLoading: false,
+
+            // Self-audit
+            selfAuditReports: [],
+            selfAuditDetail: null,
+            selfAuditRunning: false
         };
     },
 
@@ -73,6 +82,14 @@ window.PocketPaw.Transparency = {
                 // Handle Mission Control events
                 if (eventType.startsWith('mc_')) {
                     this.handleMCEvent(data);
+                    return;
+                }
+
+                // Handle live audit entries
+                if (eventType === 'audit_entry') {
+                    if (this.showAudit && data.data) {
+                        this.auditLogs.unshift(data.data);
+                    }
                     return;
                 }
 
@@ -108,6 +125,20 @@ window.PocketPaw.Transparency = {
                 }
 
                 this.activityLog.push({ time, message, level });
+
+                // Also feed plain-text version into Terminal logs
+                if (eventType === 'thinking') {
+                    this.log('Thinking...', 'info');
+                } else if (eventType === 'tool_start') {
+                    const name = data.data?.name || 'unknown';
+                    const params = JSON.stringify(data.data?.params || {}).substring(0, 80);
+                    this.log(`[TOOL] ${name} ${params}`, 'warning');
+                } else if (eventType === 'tool_result') {
+                    const name = data.data?.name || 'unknown';
+                    const isErr = data.data?.status === 'error';
+                    const result = String(data.data?.result || '').substring(0, 80);
+                    this.log(`[${isErr ? 'ERR' : 'OK'}] ${name}: ${result}`, isErr ? 'error' : 'success');
+                }
 
                 // Auto-scroll activity log
                 this.$nextTick(() => {
@@ -244,8 +275,16 @@ window.PocketPaw.Transparency = {
              * Delete a memory (placeholder - needs backend endpoint)
              */
             deleteMemory(id) {
-                // TODO: Add backend endpoint for memory deletion
-                this.showToast('Memory deletion not yet implemented', 'info');
+                fetch(`/api/memory/long_term/${encodeURIComponent(id)}`, { method: 'DELETE' })
+                    .then(r => {
+                        if (!r.ok) throw new Error('Delete failed');
+                        this.longTermMemory = this.longTermMemory.filter(m => m.id !== id);
+                        this.updateMemoryStats();
+                        this.showToast('Memory deleted', 'success');
+                    })
+                    .catch(() => {
+                        this.showToast('Failed to delete memory', 'error');
+                    });
             },
 
             // ==================== Audit Panel ====================
@@ -262,6 +301,59 @@ window.PocketPaw.Transparency = {
                     .catch(e => {
                         this.showToast('Failed to load audit logs', 'error');
                         this.auditLoading = false;
+                    });
+            },
+
+            // ==================== Security Audit ====================
+
+            runSecurityAudit() {
+                this.securityAuditLoading = true;
+                this.securityAuditResults = null;
+                fetch('/api/security-audit', { method: 'POST' })
+                    .then(r => r.json())
+                    .then(data => {
+                        this.securityAuditResults = data;
+                        this.securityAuditLoading = false;
+                    })
+                    .catch(() => {
+                        this.showToast('Security audit failed', 'error');
+                        this.securityAuditLoading = false;
+                    });
+            },
+
+            // ==================== Self-Audit ====================
+
+            loadSelfAuditReports() {
+                fetch('/api/self-audit/reports')
+                    .then(r => r.json())
+                    .then(data => { this.selfAuditReports = data; })
+                    .catch(() => {
+                        this.showToast('Failed to load self-audit reports', 'error');
+                    });
+            },
+
+            viewSelfAuditReport(date) {
+                fetch(`/api/self-audit/reports/${encodeURIComponent(date)}`)
+                    .then(r => r.json())
+                    .then(data => { this.selfAuditDetail = data; })
+                    .catch(() => {
+                        this.showToast('Failed to load report', 'error');
+                    });
+            },
+
+            triggerSelfAudit() {
+                this.selfAuditRunning = true;
+                fetch('/api/self-audit/run', { method: 'POST' })
+                    .then(r => r.json())
+                    .then(data => {
+                        this.selfAuditDetail = data;
+                        this.selfAuditRunning = false;
+                        this.loadSelfAuditReports();
+                        this.showToast(`Self-audit complete: ${data.passed}/${data.total_checks} passed`, 'success');
+                    })
+                    .catch(() => {
+                        this.showToast('Self-audit failed', 'error');
+                        this.selfAuditRunning = false;
                     });
             }
         };
