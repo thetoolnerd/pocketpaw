@@ -164,10 +164,50 @@ def main() -> int:
     # Reset if requested
     if args.reset:
         import shutil
+        import os
+        import stat
 
         if VENV_DIR.exists():
             logger.info("Resetting: removing venv at %s", VENV_DIR)
-            shutil.rmtree(VENV_DIR)
+            
+            # Windows-safe delete: handle file locks and permission errors
+            def handle_remove_error(func, path, exc_info):
+                """Error handler for shutil.rmtree to handle Windows file locks."""
+                # Make the file writable and try again
+                try:
+                    os.chmod(path, stat.S_IWRITE)
+                    func(path)
+                except Exception as e:
+                    logger.debug("Retry failed for %s: %s", path, e)
+            
+            # Try to delete with retries
+            max_attempts = 3
+            for attempt in range(max_attempts):
+                try:
+                    shutil.rmtree(VENV_DIR, onerror=handle_remove_error)
+                    if not VENV_DIR.exists():
+                        logger.info("Venv successfully removed")
+                        break
+                except Exception as e:
+                    logger.warning("Attempt %d/%d failed: %s", attempt + 1, max_attempts, e)
+                
+                if attempt < max_attempts - 1:
+                    logger.info("Retrying in 2 seconds...")
+                    time.sleep(2)
+            
+            # If venv still exists, rename it and create a new one
+            if VENV_DIR.exists():
+                backup_dir = VENV_DIR.parent / f"{VENV_DIR.name}.old.{int(time.time())}"
+                logger.warning("Could not delete venv (files may be locked)")
+                logger.info("Renaming %s -> %s", VENV_DIR, backup_dir.name)
+                try:
+                    VENV_DIR.rename(backup_dir)
+                    logger.info("Old venv moved to %s — you can delete it later", backup_dir)
+                except Exception as e:
+                    logger.error("Failed to rename venv: %s", e)
+                    logger.error("Please manually delete or rename: %s", VENV_DIR)
+                    logger.error("Then run the launcher again")
+                    return 1
 
     # Check if first run (no venv / pocketpaw not installed)
     bootstrap = Bootstrap()

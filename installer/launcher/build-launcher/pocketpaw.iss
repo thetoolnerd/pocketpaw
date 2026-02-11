@@ -55,7 +55,7 @@ Name: "autostart"; Description: "Start PocketPaw when Windows starts"; GroupDesc
 Filename: "{app}\PocketPaw.exe"; Description: "Launch PocketPaw"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
-Type: filesandirs; Name: "{app}"
+Type: filesandordirs; Name: "{app}"
 
 [Code]
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);

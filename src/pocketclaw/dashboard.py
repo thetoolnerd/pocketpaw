@@ -1802,6 +1802,8 @@ async def websocket_endpoint(
                     settings.anthropic_api_key = key
                     settings.llm_provider = "anthropic"
                     settings.save()
+                    # Reset router to pick up new API key
+                    agent_loop.reset_router()
                     await websocket.send_json(
                         {"type": "message", "content": "✅ Anthropic API key saved!"}
                     )
@@ -1809,6 +1811,8 @@ async def websocket_endpoint(
                     settings.openai_api_key = key
                     settings.llm_provider = "openai"
                     settings.save()
+                    # Reset router to pick up new API key
+                    agent_loop.reset_router()
                     await websocket.send_json(
                         {"type": "message", "content": "✅ OpenAI API key saved!"}
                     )
@@ -2429,9 +2433,14 @@ async def handle_tool(websocket: WebSocket, tool: str, settings: Settings, data:
     """Handle tool execution."""
 
     if tool == "status":
+        # Run blocking status check in thread pool to avoid freezing websocket
+        import asyncio
+        from concurrent.futures import ThreadPoolExecutor
         from pocketclaw.tools.status import get_system_status
 
-        status = get_system_status()  # sync function
+        loop = asyncio.get_event_loop()
+        with ThreadPoolExecutor() as pool:
+            status = await loop.run_in_executor(pool, get_system_status)
         await websocket.send_json({"type": "status", "content": status})
 
     elif tool == "screenshot":

@@ -17,8 +17,8 @@ def get_system_status() -> str:
             f"Install psutil for full stats: pip install 'pocketpaw[desktop]'"
         )
 
-    # CPU
-    cpu_percent = psutil.cpu_percent(interval=0.5)
+    # CPU - use interval=0 to avoid blocking (uses cached value)
+    cpu_percent = psutil.cpu_percent(interval=0)
     cpu_count = psutil.cpu_count()
 
     # Memory
