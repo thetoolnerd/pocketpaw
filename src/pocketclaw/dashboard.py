@@ -388,6 +388,16 @@ async def startup_event():
     except Exception as e:
         logger.warning("Failed to ensure project directories: %s", e)
 
+    # Recover Deep Work projects interrupted by previous shutdown
+    try:
+        from pocketclaw.deep_work import recover_interrupted_projects
+
+        recovered = await recover_interrupted_projects()
+        if recovered:
+            logger.info("Recovered %d interrupted Deep Work project(s)", recovered)
+    except Exception as e:
+        logger.warning("Failed to recover interrupted projects: %s", e)
+
     # Auto-start enabled MCP servers
     try:
         from pocketclaw.mcp.manager import get_mcp_manager

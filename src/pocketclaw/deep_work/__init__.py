@@ -38,6 +38,7 @@ __all__ = [
     "approve_project",
     "pause_project",
     "resume_project",
+    "recover_interrupted_projects",
 ]
 
 _session_instance = None
@@ -125,3 +126,15 @@ async def resume_project(project_id: str) -> Project:
     """
     session = get_deep_work_session()
     return await session.resume(project_id)
+
+
+async def recover_interrupted_projects() -> int:
+    """Recover projects interrupted by a server restart.
+
+    Should be called once on application startup.
+
+    Returns:
+        Number of projects recovered.
+    """
+    session = get_deep_work_session()
+    return await session.recover_interrupted_projects()

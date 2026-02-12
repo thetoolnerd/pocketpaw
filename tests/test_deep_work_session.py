@@ -509,6 +509,9 @@ class TestPause:
         """Verify running tasks stopped during pause."""
         project = await session.start("Build a todo app")
 
+        # Approve first (pause requires EXECUTING status)
+        await session.approve(project.id)
+
         # Simulate one task running
         mock_executor.is_task_running = MagicMock(
             side_effect=lambda tid: tid == project.task_ids[0]
@@ -522,6 +525,9 @@ class TestPause:
     async def test_pause_no_running_tasks(self, session, manager, mock_executor):
         """Verify pause works even if no tasks are running."""
         project = await session.start("Build a todo app")
+
+        # Approve first (pause requires EXECUTING status)
+        await session.approve(project.id)
 
         mock_executor.is_task_running = MagicMock(return_value=False)
         paused = await session.pause(project.id)
@@ -549,6 +555,8 @@ class TestResume:
         """Verify ready tasks dispatched after resume."""
         project = await session.start("Build a todo app")
 
+        # Approve first (pause requires EXECUTING, resume requires PAUSED)
+        await session.approve(project.id)
         await session.pause(project.id)
         resumed = await session.resume(project.id)
         assert resumed.status == ProjectStatus.EXECUTING
@@ -569,8 +577,8 @@ class TestSystemEvent:
     """Tests for _on_system_event MessageBus handler."""
 
     @pytest.mark.asyncio
-    async def test_routes_task_completed(self, manager, mock_executor):
-        """_on_system_event routes mc_task_completed to scheduler."""
+    async def test_executor_callback_wired_to_scheduler(self, manager, mock_executor):
+        """Executor's _on_task_done_callback is wired to scheduler.on_task_completed."""
         mock_scheduler = AsyncMock(spec=DependencyScheduler)
         session = DeepWorkSession(
             manager=manager,
@@ -578,11 +586,11 @@ class TestSystemEvent:
             scheduler=mock_scheduler,
         )
 
-        event = MagicMock()
-        event.event_type = "mc_task_completed"
-        event.data = {"task_id": "task-42"}
+        # Verify the callback was wired during __init__
+        assert mock_executor._on_task_done_callback is mock_scheduler.on_task_completed
 
-        await session._on_system_event(event)
+        # Invoke it directly (simulates executor finishing a task)
+        await mock_executor._on_task_done_callback("task-42")
         mock_scheduler.on_task_completed.assert_called_once_with("task-42")
 
     @pytest.mark.asyncio

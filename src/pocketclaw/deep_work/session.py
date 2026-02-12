@@ -26,6 +26,7 @@ from pocketclaw.mission_control.manager import MissionControlManager
 from pocketclaw.mission_control.models import (
     DocumentType,
     TaskPriority,
+    TaskStatus,
     now_iso,
 )
 
@@ -61,6 +62,11 @@ class DeepWorkSession:
         self.scheduler = scheduler or DependencyScheduler(manager, executor, self.human_router)
         self._subscribed = False
 
+        # Wire direct executor → scheduler callback for reliable cascade dispatch.
+        # This bypasses MessageBus so task completion always triggers dependent
+        # task dispatch even if the bus drops an event.
+        executor._on_task_done_callback = self.scheduler.on_task_completed
+
     def subscribe_to_bus(self) -> None:
         """Subscribe to MessageBus for task completion events.
 
@@ -79,6 +85,61 @@ class DeepWorkSession:
             logger.info("DeepWorkSession subscribed to MessageBus")
         except Exception as e:
             logger.warning(f"Could not subscribe to MessageBus: {e}")
+
+    # =========================================================================
+    # Startup recovery
+    # =========================================================================
+
+    async def recover_interrupted_projects(self) -> int:
+        """Recover projects interrupted by a server restart.
+
+        Called once on application startup. Handles:
+        - PLANNING projects: marked as FAILED (planning interrupted).
+        - EXECUTING projects: stuck IN_PROGRESS tasks reset to ASSIGNED,
+          then ready tasks are re-dispatched.
+
+        Returns:
+            Number of projects recovered.
+        """
+        import asyncio
+
+        recovered = 0
+        projects = await self.manager.list_projects()
+
+        for project in projects:
+            if project.status == ProjectStatus.PLANNING:
+                # Planning was interrupted — mark as failed
+                project.status = ProjectStatus.FAILED
+                project.metadata["error"] = "Planning interrupted by server restart"
+                await self.manager.update_project(project)
+                logger.info(f"Marked interrupted planning project as failed: {project.title}")
+                self._broadcast_planning_complete(project)
+                recovered += 1
+
+            elif project.status == ProjectStatus.EXECUTING:
+                # Reset stuck IN_PROGRESS tasks to ASSIGNED
+                tasks = await self.manager.get_project_tasks(project.id)
+                reset_count = 0
+                for task in tasks:
+                    if task.status == TaskStatus.IN_PROGRESS:
+                        # Not actually running (executor state is gone after restart)
+                        if not self.executor.is_task_running(task.id):
+                            task.status = TaskStatus.ASSIGNED
+                            task.updated_at = now_iso()
+                            await self.manager.save_task(task)
+                            reset_count += 1
+
+                if reset_count > 0:
+                    logger.info(f"Reset {reset_count} stuck tasks for project: {project.title}")
+                    # Re-dispatch ready tasks
+                    ready = await self.scheduler.get_ready_tasks(project.id)
+                    if ready:
+                        await asyncio.gather(*(self.scheduler._dispatch_task(t) for t in ready))
+                    recovered += 1
+
+        if recovered:
+            logger.info(f"Recovered {recovered} interrupted project(s)")
+        return recovered
 
     # =========================================================================
     # Public lifecycle methods
@@ -114,8 +175,34 @@ class DeepWorkSession:
             creator_id="human",
         )
 
+        # 2. Run planning on the new project
+        return await self.plan_existing_project(
+            project.id, user_input, research_depth=research_depth
+        )
+
+    async def plan_existing_project(
+        self, project_id: str, user_input: str, research_depth: str = "standard"
+    ) -> Project:
+        """Run planner on an already-created project.
+
+        Called by start() or by the async API endpoint. Broadcasts a
+        dw_planning_complete event when done (success or failure).
+
+        Args:
+            project_id: ID of the project to plan.
+            user_input: Natural language project description.
+            research_depth: How thorough to research — "none", "quick",
+                "standard", or "deep".
+
+        Returns:
+            The updated Project.
+        """
+        project = await self.manager.get_project(project_id)
+        if not project:
+            raise ValueError(f"Project not found: {project_id}")
+
         try:
-            # 2. Plan
+            # Plan
             project.status = ProjectStatus.PLANNING
             await self.manager.update_project(project)
 
@@ -127,7 +214,7 @@ class DeepWorkSession:
             title = _extract_title(result.prd_content) or user_input[:80]
             project.title = title
 
-            # 3. Save PRD as Document
+            # Save PRD as Document
             if result.prd_content:
                 prd_doc = await self.manager.create_document(
                     title=f"PRD: {title}",
@@ -137,13 +224,14 @@ class DeepWorkSession:
                 )
                 project.prd_document_id = prd_doc.id
 
-            # 4. Validate dependency graph
+            # Validate dependency graph
             all_tasks = result.tasks + result.human_tasks
             is_valid, error_msg = DependencyScheduler.validate_graph(all_tasks)
             if not is_valid:
                 project.status = ProjectStatus.FAILED
                 project.metadata["error"] = f"Invalid dependency graph: {error_msg}"
                 await self.manager.update_project(project)
+                self._broadcast_planning_complete(project)
                 return project
 
             # Handle empty task list
@@ -151,12 +239,13 @@ class DeepWorkSession:
                 project.status = ProjectStatus.FAILED
                 project.metadata["error"] = "Planner produced no tasks"
                 await self.manager.update_project(project)
+                self._broadcast_planning_complete(project)
                 return project
 
-            # 5. Create MC Tasks
+            # Create MC Tasks
             key_to_id = await self._materialize_tasks(project, all_tasks)
 
-            # 6. Create agent team
+            # Create agent team
             for agent_spec in result.team_recommendation:
                 existing = await self.manager.get_agent_by_name(agent_spec.name)
                 if existing:
@@ -171,14 +260,14 @@ class DeepWorkSession:
                     )
                     project.team_agent_ids.append(agent.id)
 
-            # 7. Auto-assign tasks to agents
+            # Auto-assign tasks to agents
             await self._assign_tasks_to_agents(project, result, key_to_id)
 
-            # 8. Transition to AWAITING_APPROVAL
+            # Transition to AWAITING_APPROVAL
             project.status = ProjectStatus.AWAITING_APPROVAL
             await self.manager.update_project(project)
 
-            # 9. Notify
+            # Notify
             task_count = len(all_tasks)
             await self.human_router.notify_plan_ready(
                 project,
@@ -186,11 +275,14 @@ class DeepWorkSession:
                 estimated_minutes=result.estimated_total_minutes,
             )
 
+            self._broadcast_planning_complete(project)
+
         except Exception as e:
             logger.exception(f"Planning failed for project {project.id}: {e}")
             project.status = ProjectStatus.FAILED
             project.metadata["error"] = str(e)
             await self.manager.update_project(project)
+            self._broadcast_planning_complete(project)
             raise
 
         return project
@@ -207,18 +299,22 @@ class DeepWorkSession:
         Raises:
             ValueError: If project not found.
         """
+        import asyncio
+
         project = await self.manager.get_project(project_id)
         if not project:
             raise ValueError(f"Project not found: {project_id}")
+        if project.status != ProjectStatus.AWAITING_APPROVAL:
+            raise ValueError(f"Cannot approve project with status '{project.status.value}'")
 
         project.status = ProjectStatus.EXECUTING
         project.started_at = now_iso()
         await self.manager.update_project(project)
 
-        # Kick off tasks with no blockers
+        # Kick off tasks with no blockers — dispatch concurrently
         ready = await self.scheduler.get_ready_tasks(project_id)
-        for task in ready:
-            await self.scheduler._dispatch_task(task)
+        if ready:
+            await asyncio.gather(*(self.scheduler._dispatch_task(t) for t in ready))
 
         return project
 
@@ -237,6 +333,8 @@ class DeepWorkSession:
         project = await self.manager.get_project(project_id)
         if not project:
             raise ValueError(f"Project not found: {project_id}")
+        if project.status != ProjectStatus.EXECUTING:
+            raise ValueError(f"Cannot pause project with status '{project.status.value}'")
 
         # Stop all running tasks for this project
         for task_id in project.task_ids:
@@ -262,16 +360,20 @@ class DeepWorkSession:
         Raises:
             ValueError: If project not found.
         """
+        import asyncio
+
         project = await self.manager.get_project(project_id)
         if not project:
             raise ValueError(f"Project not found: {project_id}")
+        if project.status != ProjectStatus.PAUSED:
+            raise ValueError(f"Cannot resume project with status '{project.status.value}'")
 
         project.status = ProjectStatus.EXECUTING
         await self.manager.update_project(project)
 
         ready = await self.scheduler.get_ready_tasks(project_id)
-        for task in ready:
-            await self.scheduler._dispatch_task(task)
+        if ready:
+            await asyncio.gather(*(self.scheduler._dispatch_task(t) for t in ready))
 
         logger.info(f"Project resumed: {project.title}")
         return project
@@ -281,11 +383,49 @@ class DeepWorkSession:
     # =========================================================================
 
     async def _on_system_event(self, event: Any) -> None:
-        """Handle MessageBus SystemEvents for task completion routing."""
-        if event.event_type == "mc_task_completed":
-            task_id = event.data.get("task_id")
-            if task_id:
-                await self.scheduler.on_task_completed(task_id)
+        """Handle MessageBus SystemEvents.
+
+        Note: Task completion → scheduler cascade is now handled directly
+        via executor._on_task_done_callback for reliability. This handler
+        remains for future event types.
+        """
+        pass
+
+    # =========================================================================
+    # Broadcasting helpers
+    # =========================================================================
+
+    def _broadcast_planning_complete(self, project: Project) -> None:
+        """Broadcast a planning completion event for the frontend.
+
+        Sends dw_planning_complete with the project status so the frontend
+        knows to stop the spinner and reload the plan.
+        """
+        try:
+            import asyncio
+
+            from pocketclaw.bus import get_message_bus
+            from pocketclaw.bus.events import SystemEvent
+
+            bus = get_message_bus()
+            loop = asyncio.get_running_loop()
+            loop.create_task(
+                bus.publish_system(
+                    SystemEvent(
+                        event_type="dw_planning_complete",
+                        data={
+                            "project_id": project.id,
+                            "status": project.status.value
+                            if hasattr(project.status, "value")
+                            else str(project.status),
+                            "title": project.title,
+                            "error": project.metadata.get("error"),
+                        },
+                    )
+                )
+            )
+        except Exception:
+            pass  # Best effort
 
     # =========================================================================
     # Internal helpers
@@ -332,13 +472,13 @@ class DeepWorkSession:
                     dep_task = await self.manager.get_task(dep_id)
                     if dep_task and task.id not in dep_task.blocks:
                         dep_task.blocks.append(task.id)
-                        await self.manager._store.save_task(dep_task)
+                        await self.manager.save_task(dep_task)
 
             key_to_id[spec.key] = task.id
             project.task_ids.append(task.id)
 
             # Re-save the task with deep work fields
-            await self.manager._store.save_task(task)
+            await self.manager.save_task(task)
 
         return key_to_id
 
