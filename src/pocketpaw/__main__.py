@@ -244,11 +244,11 @@ def _is_headless() -> bool:
     return not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY")
 
 
-def run_dashboard_mode(settings: Settings, host: str, port: int) -> None:
+def run_dashboard_mode(settings: Settings, host: str, port: int, dev: bool = False) -> None:
     """Run in web dashboard mode."""
     from pocketpaw.dashboard import run_dashboard
 
-    run_dashboard(host=host, port=port, open_browser=not _is_headless())
+    run_dashboard(host=host, port=port, open_browser=not _is_headless() and not dev, dev=dev)
 
 
 async def check_ollama(settings: Settings) -> int:
@@ -503,6 +503,7 @@ Examples:
   pocketpaw --slack                  Start headless Slack bot (Socket Mode)
   pocketpaw --whatsapp               Start headless WhatsApp webhook server
   pocketpaw --discord --slack        Run Discord + Slack simultaneously
+  pocketpaw --dev                    Start dashboard with auto-reload (dev mode)
 """,
     )
 
@@ -544,6 +545,9 @@ Examples:
     )
     parser.add_argument(
         "--port", "-p", type=int, default=8888, help="Port for web server (default: 8888)"
+    )
+    parser.add_argument(
+        "--dev", action="store_true", help="Development mode with auto-reload"
     )
     parser.add_argument(
         "--check-ollama",
@@ -640,7 +644,7 @@ Examples:
             asyncio.run(run_multi_channel_mode(settings, args))
         else:
             # Default: web dashboard (also handles --web flag)
-            run_dashboard_mode(settings, host, args.port)
+            run_dashboard_mode(settings, host, args.port, dev=args.dev)
     except KeyboardInterrupt:
         logger.info("👋 PocketPaw stopped.")
     finally:
