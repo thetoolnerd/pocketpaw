@@ -13,6 +13,9 @@ restartPolicyMaxRetries = 3
 [[deploy.volumes]]
 mountPath = "/home/pocketpaw/data"
 
+[[deploy.volumes]]
+mountPath = "/home/pocketpaw/.pocketpaw"
+
 [deploy.env]
 PYTHONUNBUFFERED = "1"
 ANTHROPIC_BASE_URL = "https://api.kimi.com/coding/"
