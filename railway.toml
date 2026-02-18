@@ -11,12 +11,26 @@ restartPolicyMaxRetries = 3
 
 [deploy.env]
 PYTHONUNBUFFERED = "1"
-# Kimi Code API endpoint
+
+# Kimi Code API
 ANTHROPIC_BASE_URL = "https://api.kimi.com/coding/"
-# PocketPaw web config
+
+# Web server
 POCKETPAW_WEB_HOST = "0.0.0.0"
 POCKETPAW_WEB_PORT = "8888"
 POCKETPAW_LOCALHOST_AUTH_BYPASS = "false"
-# Enable Claude Code integration
+
+# Tool config
+POCKETPAW_TOOL_PROFILE = "coding"
+POCKETPAW_TOOL_WHITELIST = "shell,gmail,imap,playwright"
+POCKETPAW_PLAN_MODE = "true"
+
+# Security
+POCKETPAW_GUARDIAN_LEVEL = "HIGH"
+
+# Working directory
+POCKETPAW_SHELL_CWD = "/home/pocketpaw/projects"
+
+# Claude Code
 POCKETPAW_CLAUDE_CODE_ENABLED = "true"
 POCKETPAW_CLAUDE_CODE_PATH = "/usr/local/bin/claude"
