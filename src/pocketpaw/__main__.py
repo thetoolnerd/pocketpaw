@@ -42,8 +42,7 @@ async def run_telegram_mode(settings: Settings) -> None:
             port = find_available_port(settings.web_port)
         except OSError:
             logger.error(
-                "❌ Could not find an available port. Please close other applications and "
-                "try again."
+                "❌ Could not find an available port. Please close other applications and try again."
             )
             return
 
@@ -435,7 +434,7 @@ async def check_openai_compatible(settings: Settings) -> int:
                 }
             ],
         )
-        has_tool_use = bool(tool_response.choices[0].message.tool_calls)
+        has_tool_use = bool(response.choices[0].message.tool_calls)
         if has_tool_use:
             console.print("  [green]\\[OK][/]  Tool calling works")
         else:
@@ -545,11 +544,7 @@ Examples:
         help="Host to bind web server (default: auto-detect; 0.0.0.0 on headless servers)",
     )
     parser.add_argument(
-        "--port",
-        "-p",
-        type=int,
-        default=None,
-        help="Port for web server (default: settings/web_port or 8888)",
+        "--port", "-p", type=int, default=8888, help="Port for web server (default: 8888)"
     )
     parser.add_argument(
         "--dev", action="store_true", help="Development mode with auto-reload"
@@ -621,8 +616,6 @@ Examples:
     else:
         host = "127.0.0.1"
 
-    port = args.port if args.port is not None else settings.web_port
-
     has_channel_flag = (
         args.discord
         or args.slack
@@ -651,7 +644,7 @@ Examples:
             asyncio.run(run_multi_channel_mode(settings, args))
         else:
             # Default: web dashboard (also handles --web flag)
-            run_dashboard_mode(settings, host, port, dev=args.dev)
+            run_dashboard_mode(settings, host, args.port, dev=args.dev)
     except KeyboardInterrupt:
         logger.info("👋 PocketPaw stopped.")
     finally:

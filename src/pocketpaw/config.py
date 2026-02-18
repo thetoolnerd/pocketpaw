@@ -15,7 +15,7 @@ import logging
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import AliasChoices, Field
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -96,10 +96,7 @@ class Settings(BaseSettings):
     # Agent Backend
     agent_backend: str = Field(
         default="claude_agent_sdk",
-        description=(
-            "Agent backend: 'claude_agent_sdk' (recommended), 'pocketpaw_native', "
-            "or 'open_interpreter' (experimental)"
-        ),
+        description="Agent backend: 'claude_agent_sdk' (recommended), 'pocketpaw_native', or 'open_interpreter' (experimental)",
     )
 
     # Claude Agent SDK Settings
@@ -432,11 +429,7 @@ class Settings(BaseSettings):
 
     # Web Server
     web_host: str = Field(default="127.0.0.1", description="Web server host")
-    web_port: int = Field(
-        default=8888,
-        description="Web server port",
-        validation_alias=AliasChoices("POCKETPAW_WEB_PORT", "PORT"),
-    )
+    web_port: int = Field(default=8888, description="Web server port")
 
     # MCP OAuth
     mcp_client_metadata_url: str = Field(
