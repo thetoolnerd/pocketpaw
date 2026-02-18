@@ -75,8 +75,8 @@ RUN mkdir -p /home/pocketpaw/.config && \
     echo '{"hasCompletedOnboarding": true, "preferredNotToShare": true}' > /home/pocketpaw/.claude.json && \
     chown -R pocketpaw:pocketpaw /home/pocketpaw/.claude.json
 
-# Switch to non-root user
-USER pocketpaw
+# Run as root for full shell access
+USER root
 WORKDIR /home/pocketpaw
 
 # PocketPaw web configuration
