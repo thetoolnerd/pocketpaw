@@ -14,7 +14,7 @@ restartPolicyMaxRetries = 3
 mountPath = "/home/pocketpaw/data"
 
 [[deploy.volumes]]
-mountPath = "/home/pocketpaw/.pocketpaw"
+mountPath = "/root/.pocketpaw"
 
 [deploy.env]
 PYTHONUNBUFFERED = "1"
