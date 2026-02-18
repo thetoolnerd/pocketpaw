@@ -9,16 +9,14 @@ healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
 
-# Mount volume at subdirectory, NOT /home/pocketpaw
+# Railway supports a single volume per service.
 [[deploy.volumes]]
 mountPath = "/home/pocketpaw/data"
-
-[[deploy.volumes]]
-mountPath = "/root/.pocketpaw"
 
 [deploy.env]
 PYTHONUNBUFFERED = "1"
 ANTHROPIC_BASE_URL = "https://api.kimi.com/coding/"
+HOME = "/home/pocketpaw/data"
 POCKETPAW_WEB_HOST = "0.0.0.0"
 POCKETPAW_LOCALHOST_AUTH_BYPASS = "false"
 POCKETPAW_SHELL_CWD = "/home/pocketpaw/data/projects"
