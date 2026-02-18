@@ -23,7 +23,7 @@ RUN playwright install chromium
 FROM python:3.12-slim
 
 # Runtime system deps: tesseract for OCR, curl for healthcheck,
-# shared libs required by Playwright Chromium
+# shared libs required by Playwright Chromium, and Node.js for Claude Code
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     curl \
@@ -44,6 +44,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxshmfence1 \
     libx11-xcb1 \
     fonts-liberation \
+    # Node.js dependencies for Claude Code
+    ca-certificates \
+    gnupg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js 20.x (required for Claude Code)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy venv from builder
@@ -59,16 +67,30 @@ RUN groupadd --system pocketpaw && \
     mkdir -p /home/pocketpaw/.pocketpaw && \
     chown -R pocketpaw:pocketpaw /home/pocketpaw
 
+# Install Claude Code globally as root (npm global install needs root)
+RUN npm install -g @anthropic-ai/claude-code --registry=https://registry.npmmirror.com
+
+# Configure Claude Code to skip onboarding (create config for pocketpaw user)
+RUN mkdir -p /home/pocketpaw/.config && \
+    echo '{"hasCompletedOnboarding": true, "preferredNotToShare": true}' > /home/pocketpaw/.claude.json && \
+    chown -R pocketpaw:pocketpaw /home/pocketpaw/.claude.json
+
+# Switch to non-root user
 USER pocketpaw
 WORKDIR /home/pocketpaw
 
-# Bind to 0.0.0.0 so the container port is reachable from the host
+# PocketPaw web configuration
 ENV POCKETPAW_WEB_HOST=0.0.0.0
 ENV POCKETPAW_WEB_PORT=8888
-# Disable localhost auth bypass — Docker bridge networking means requests
-# arrive from 172.x.x.x, not 127.0.0.1, so the bypass would never trigger.
-# Users authenticate with the access token instead.
 ENV POCKETPAW_LOCALHOST_AUTH_BYPASS=false
+
+# Kimi Code API Configuration (Claude Code will use these)
+ENV ANTHROPIC_BASE_URL=https://api.kimi.com/coding/
+# ANTHROPIC_API_KEY should be set at runtime via Railway/dashboard
+
+# Claude Code configuration for PocketPaw
+ENV POCKETPAW_CLAUDE_CODE_ENABLED=true
+ENV POCKETPAW_CLAUDE_CODE_PATH=/usr/local/bin/claude
 
 EXPOSE 8888
 
