@@ -838,6 +838,17 @@ async def install_skill(request: Request):
     install_dir = Path.home() / ".agents" / "skills"
     install_dir.mkdir(parents=True, exist_ok=True)
 
+    if shutil.which("git") is None:
+        return JSONResponse(
+            {
+                "error": (
+                    "Skill install requires 'git', but it is not available in this runtime. "
+                    "Install git in the container image and redeploy."
+                )
+            },
+            status_code=500,
+        )
+
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
             proc = await asyncio.create_subprocess_exec(

@@ -27,6 +27,7 @@ FROM python:3.12-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     curl \
+    git \
     # Playwright Chromium shared libs
     libnss3 \
     libatk1.0-0 \
