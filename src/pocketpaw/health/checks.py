@@ -569,9 +569,18 @@ async def check_llm_reachable() -> HealthCheckResult:
                     fix_hint="Set your Anthropic API key first.",
                 )
 
+            base_url = os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com").strip()
+            if not base_url:
+                base_url = "https://api.anthropic.com"
+            base_url = base_url.rstrip("/")
+            if base_url.endswith("/v1"):
+                models_url = f"{base_url}/models"
+            else:
+                models_url = f"{base_url}/v1/models"
+
             async with httpx.AsyncClient(timeout=5.0) as client:
                 resp = await client.get(
-                    "https://api.anthropic.com/v1/models",
+                    models_url,
                     headers={
                         "x-api-key": api_key,
                         "anthropic-version": "2023-06-01",
