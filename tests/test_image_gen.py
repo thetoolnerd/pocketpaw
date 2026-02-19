@@ -1,8 +1,8 @@
-# Tests for Feature 4: ImageGenerateTool
-# Created: 2026-02-06
+# Tests for ImageGenerateTool
 
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -16,8 +16,6 @@ def tool():
 
 
 class TestImageGenerateTool:
-    """Tests for ImageGenerateTool."""
-
     def test_name(self, tool):
         assert tool.name == "image_generate"
 
@@ -29,6 +27,7 @@ class TestImageGenerateTool:
         assert "prompt" in params["properties"]
         assert "aspect_ratio" in params["properties"]
         assert "size" in params["properties"]
+        assert "model" in params["properties"]
         assert "prompt" in params["required"]
 
     @patch("pocketpaw.tools.builtin.image_gen.get_settings")
@@ -42,110 +41,122 @@ class TestImageGenerateTool:
     async def test_missing_genai_package(self, mock_settings, tool):
         mock_settings.return_value = MagicMock(
             google_api_key="test-key",
-            image_model="gemini-2.0-flash-exp",
+            image_model="gemini-2.5-flash-image",
         )
 
-        with patch.dict("sys.modules", {"google": None, "google.genai": None}):
-            # Force ImportError by patching builtins
-            import builtins
+        import builtins
 
-            original_import = builtins.__import__
+        original_import = builtins.__import__
 
-            def mock_import(name, *args, **kwargs):
-                if name == "google" or name.startswith("google."):
-                    raise ImportError("No module named 'google'")
-                return original_import(name, *args, **kwargs)
+        def mock_import(name, *args, **kwargs):
+            if name == "google" or name.startswith("google."):
+                raise ImportError("No module named 'google'")
+            return original_import(name, *args, **kwargs)
 
-            with patch.object(builtins, "__import__", side_effect=mock_import):
-                result = await tool.execute(prompt="a cat")
+        with patch.object(builtins, "__import__", side_effect=mock_import):
+            result = await tool.execute(prompt="a cat")
 
         assert "Error" in result
         assert "google-genai" in result
 
     @patch("pocketpaw.tools.builtin.image_gen._get_generated_dir")
     @patch("pocketpaw.tools.builtin.image_gen.get_settings")
-    async def test_image_generation_success(self, mock_settings, mock_dir, tool):
+    async def test_image_generation_success_uses_default_model(self, mock_settings, mock_dir, tool):
         mock_settings.return_value = MagicMock(
             google_api_key="test-key",
-            image_model="gemini-2.0-flash-exp",
+            image_model="gemini-2.5-flash-image",
         )
 
         with tempfile.TemporaryDirectory() as tmpdir:
             mock_dir.return_value = Path(tmpdir)
 
-            # Mock the entire google.genai module
             mock_image = MagicMock()
-            mock_image.save = MagicMock()
-
-            mock_generated = MagicMock()
-            mock_generated.image = mock_image
-
-            mock_response = MagicMock()
-            mock_response.generated_images = [mock_generated]
+            mock_part = MagicMock()
+            mock_part.as_image.return_value = mock_image
+            mock_response = SimpleNamespace(parts=[mock_part])
 
             mock_client = MagicMock()
-            mock_client.models.generate_images.return_value = mock_response
+            mock_client.models.generate_content.return_value = mock_response
 
-            mock_genai = MagicMock()
-            mock_genai.Client.return_value = mock_client
+            mock_genai = SimpleNamespace(
+                Client=MagicMock(return_value=mock_client),
+            )
+            mock_google = SimpleNamespace(genai=mock_genai)
 
-            with patch.dict("sys.modules", {"google": MagicMock(), "google.genai": mock_genai}):
-                with patch(
-                    "pocketpaw.tools.builtin.image_gen.ImageGenerateTool.execute",
-                    wraps=tool.execute,
-                ):
-                    # Directly test the logic with mocked genai
-                    import builtins
+            with patch.dict("sys.modules", {"google": mock_google, "google.genai": mock_genai}):
+                result = await tool.execute(prompt="a cat on a skateboard", aspect_ratio="16:9")
 
-                    original_import = builtins.__import__
+            assert "Image generated with gemini-2.5-flash-image" in result
+            mock_client.models.generate_content.assert_called_once_with(
+                model="gemini-2.5-flash-image",
+                contents=["a cat on a skateboard"],
+            )
+            mock_image.save.assert_called_once()
 
-                    def mock_import(name, *args, **kwargs):
-                        if name == "google.genai" or name == "google":
-                            return mock_genai
-                        return original_import(name, *args, **kwargs)
+    @patch("pocketpaw.tools.builtin.image_gen._get_generated_dir")
+    @patch("pocketpaw.tools.builtin.image_gen.get_settings")
+    async def test_image_generation_success_with_model_override(self, mock_settings, mock_dir, tool):
+        mock_settings.return_value = MagicMock(
+            google_api_key="test-key",
+            image_model="gemini-2.5-flash-image",
+        )
 
-                    # We need to simulate the from google import genai pattern
-                    mock_google_mod = MagicMock()
-                    mock_google_mod.genai = mock_genai
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mock_dir.return_value = Path(tmpdir)
 
-                    with patch.object(builtins, "__import__", side_effect=mock_import):
-                        # Since we can't easily mock `from google import genai`,
-                        # let's test the output format instead
-                        pass
+            mock_image = MagicMock()
+            mock_part = MagicMock()
+            mock_part.as_image.return_value = mock_image
+            mock_response = SimpleNamespace(parts=[mock_part])
 
-            # Test the format method directly
-            mock_image.save.assert_not_called()  # We didn't run through
+            mock_client = MagicMock()
+            mock_client.models.generate_content.return_value = mock_response
+
+            mock_genai = SimpleNamespace(
+                Client=MagicMock(return_value=mock_client),
+            )
+            mock_google = SimpleNamespace(genai=mock_genai)
+
+            with patch.dict("sys.modules", {"google": mock_google, "google.genai": mock_genai}):
+                result = await tool.execute(
+                    prompt="cinematic skyline",
+                    model="gemini-3-pro-image-preview",
+                )
+
+            assert "Image generated with gemini-3-pro-image-preview" in result
+            mock_client.models.generate_content.assert_called_once_with(
+                model="gemini-3-pro-image-preview",
+                contents=["cinematic skyline"],
+            )
+            mock_image.save.assert_called_once()
 
     @patch("pocketpaw.tools.builtin.image_gen._get_generated_dir")
     @patch("pocketpaw.tools.builtin.image_gen.get_settings")
     async def test_no_images_generated(self, mock_settings, mock_dir, tool):
         mock_settings.return_value = MagicMock(
             google_api_key="test-key",
-            image_model="gemini-2.0-flash-exp",
+            image_model="gemini-2.5-flash-image",
         )
 
         with tempfile.TemporaryDirectory() as tmpdir:
             mock_dir.return_value = Path(tmpdir)
 
-            mock_genai = MagicMock()
-            mock_client = MagicMock()
-            mock_response = MagicMock()
-            mock_response.generated_images = []
-            mock_client.models.generate_images.return_value = mock_response
-            mock_genai.Client.return_value = mock_client
+            mock_part = MagicMock()
+            mock_part.as_image.return_value = None
+            mock_response = SimpleNamespace(parts=[mock_part])
 
-            with patch(
-                "builtins.__import__",
-                side_effect=lambda name, *a, **kw: (
-                    mock_genai
-                    if name in ("google", "google.genai")
-                    else __builtins__["__import__"](name, *a, **kw)
-                    if isinstance(__builtins__, dict)
-                    else type(__builtins__).__import__(__builtins__, name, *a, **kw)
-                ),
-            ):
-                # Simpler approach: directly patch the genai import at module level
-                pass
+            mock_client = MagicMock()
+            mock_client.models.generate_content.return_value = mock_response
+
+            mock_genai = SimpleNamespace(
+                Client=MagicMock(return_value=mock_client),
+            )
+            mock_google = SimpleNamespace(genai=mock_genai)
+
+            with patch.dict("sys.modules", {"google": mock_google, "google.genai": mock_genai}):
+                result = await tool.execute(prompt="a cat")
+
+            assert "Error: No image was generated" in result
 
     def test_generated_dir_creation(self):
         with tempfile.TemporaryDirectory() as tmpdir:

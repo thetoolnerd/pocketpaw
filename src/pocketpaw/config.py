@@ -264,7 +264,7 @@ class Settings(BaseSettings):
     # Image Generation
     google_api_key: str | None = Field(default=None, description="Google API key (for Gemini)")
     image_model: str = Field(
-        default="gemini-2.0-flash-exp", description="Google image generation model"
+        default="gemini-2.5-flash-image", description="Google image generation model"
     )
 
     # Security

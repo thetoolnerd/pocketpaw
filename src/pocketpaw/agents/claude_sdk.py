@@ -100,6 +100,7 @@ directly — never use a tool to look up what you already know.
 
 ### Image Generation
 - `image_generate '{"prompt": "a sunset over mountains", "aspect_ratio": "16:9"}'`
+- `image_generate '{"prompt": "cinematic city skyline", "model": "gemini-3-pro-image-preview"}'`
 
 ### Web Content
 - `web_search '{"query": "latest news on AI"}'` — web search (Tavily/Brave)

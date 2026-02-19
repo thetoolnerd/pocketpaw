@@ -21,7 +21,7 @@ def _get_generated_dir() -> Path:
 
 
 class ImageGenerateTool(BaseTool):
-    """Generate images using Google Gemini (Nano Banana)."""
+    """Generate images using Google Gemini native image models."""
 
     @property
     def name(self) -> str:
@@ -30,9 +30,10 @@ class ImageGenerateTool(BaseTool):
     @property
     def description(self) -> str:
         return (
-            "Generate an image from a text prompt using Google Gemini. "
+            "Generate an image from a text prompt using Google Gemini image models. "
             "Returns the file path of the saved image. "
-            "Supports aspect ratios like '1:1', '16:9', '9:16'."
+            "Model can be overridden per request (e.g. 'gemini-2.5-flash-image' or "
+            "'gemini-3-pro-image-preview')."
         )
 
     @property
@@ -55,8 +56,12 @@ class ImageGenerateTool(BaseTool):
                 },
                 "size": {
                     "type": "string",
-                    "description": "Output resolution hint (default: '1K')",
-                    "default": "1K",
+                    "description": "Unused for Gemini native models. Kept for backward compatibility.",
+                    "default": "",
+                },
+                "model": {
+                    "type": "string",
+                    "description": "Optional model override. Defaults to configured image_model.",
                 },
             },
             "required": ["prompt"],
@@ -66,7 +71,8 @@ class ImageGenerateTool(BaseTool):
         self,
         prompt: str,
         aspect_ratio: str = "1:1",
-        size: str = "1K",
+        size: str = "",
+        model: str = "",
     ) -> str:
         """Generate an image from a text prompt."""
         settings = get_settings()
@@ -83,19 +89,25 @@ class ImageGenerateTool(BaseTool):
 
         try:
             client = genai.Client(api_key=settings.google_api_key)
-            response = client.models.generate_images(
-                model=settings.image_model,
-                prompt=prompt,
-                config=genai.types.GenerateImagesConfig(
-                    number_of_images=1,
-                    aspect_ratio=aspect_ratio,
-                ),
+            selected_model = (model or settings.image_model or "gemini-2.5-flash-image").strip()
+
+            # Gemini native image models use generate_content, not generate_images.
+            response = client.models.generate_content(
+                model=selected_model,
+                contents=[prompt],
             )
 
-            if not response.generated_images:
+            image = None
+            for part in getattr(response, "parts", []) or []:
+                as_image = getattr(part, "as_image", None)
+                if callable(as_image):
+                    image = as_image()
+                    if image is not None:
+                        break
+
+            if image is None:
                 return self._error("No image was generated. Try a different prompt.")
 
-            image = response.generated_images[0].image
             out_dir = _get_generated_dir()
             filename = f"{uuid.uuid4()}.png"
             out_path = out_dir / filename
@@ -104,7 +116,7 @@ class ImageGenerateTool(BaseTool):
             logger.info("Generated image: %s", out_path)
             return self._media_result(
                 str(out_path),
-                f"Image generated (prompt: {prompt}, aspect ratio: {aspect_ratio})",
+                f"Image generated with {selected_model} (prompt: {prompt}, aspect ratio: {aspect_ratio})",
             )
 
         except Exception as e:

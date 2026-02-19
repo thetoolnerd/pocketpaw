@@ -2270,6 +2270,8 @@ async def websocket_endpoint(
                             settings.openai_compatible_max_tokens = int(val)
                     if data.get("gemini_model"):
                         settings.gemini_model = data["gemini_model"]
+                    if data.get("image_model"):
+                        settings.image_model = data["image_model"]
                     if "bypass_permissions" in data:
                         settings.bypass_permissions = bool(data.get("bypass_permissions"))
                     if data.get("web_search_provider"):
@@ -2472,6 +2474,7 @@ async def websocket_endpoint(
                             "openaiCompatibleMaxTokens": settings.openai_compatible_max_tokens,
                             "hasOpenaiCompatibleKey": bool(settings.openai_compatible_api_key),
                             "geminiModel": settings.gemini_model,
+                            "imageModel": settings.image_model,
                             "hasGoogleApiKey": bool(settings.google_api_key),
                             "bypassPermissions": settings.bypass_permissions,
                             "hasAnthropicKey": bool(settings.anthropic_api_key),

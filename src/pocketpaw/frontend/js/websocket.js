@@ -199,6 +199,7 @@ class PocketPawSocket {
             openai_compatible_model: settings.openaiCompatibleModel,
             openai_compatible_max_tokens: parseInt(settings.openaiCompatibleMaxTokens) || 0,
             gemini_model: settings.geminiModel,
+            image_model: settings.imageModel,
             bypass_permissions: settings.bypassPermissions,
             web_search_provider: settings.webSearchProvider,
             url_extract_provider: settings.urlExtractProvider,
