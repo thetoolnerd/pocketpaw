@@ -304,8 +304,8 @@ def check_backend_deps() -> HealthCheckResult:
     missing = []
 
     if backend == "claude_agent_sdk":
-        if importlib.util.find_spec("claude_code_sdk") is None:
-            missing.append("claude-code-sdk")
+        if importlib.util.find_spec("claude_agent_sdk") is None:
+            missing.append("claude-agent-sdk")
     elif backend == "pocketpaw_native":
         if importlib.util.find_spec("anthropic") is None:
             missing.append("anthropic")
