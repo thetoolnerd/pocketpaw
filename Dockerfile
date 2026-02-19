@@ -91,10 +91,17 @@ ENV ANTHROPIC_BASE_URL=https://api.kimi.com/coding/
 # Claude Code configuration for PocketPaw
 ENV POCKETPAW_CLAUDE_CODE_ENABLED=true
 ENV POCKETPAW_CLAUDE_CODE_PATH=/usr/local/bin/claude
+ENV POCKETPAW_DATA_DIR=/home/pocketpaw/data
+ENV HOME=/home/pocketpaw/data
+
+# Runtime entrypoint (sets up persistent data links before launching PocketPaw)
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 EXPOSE 8888
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8888/ || exit 1
-    
+
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["pocketpaw"]
