@@ -59,6 +59,9 @@ function app() {
 
         // Terminal logs
         logs: [],
+        // Kept here for test compatibility; actual chat state is provided by Chat feature module.
+        messages: [],
+        agentActive: true,
 
         // System status
         status: {
@@ -378,7 +381,7 @@ function app() {
             socket.on('code', (data) => this.handleCode(data));
             socket.on('error', (data) => this.handleError(data));
             socket.on('stream_start', () => this.startStreaming());
-            socket.on('stream_end', () => this.endStreaming());
+            socket.on('stream_end', (data) => this.endStreaming(data || {}));
             socket.on('files', (data) => this.handleFiles(data));
             socket.on('settings', (data) => this.handleSettings(data));
 

@@ -29,7 +29,8 @@ window.PocketPaw.Chat = {
 
             // Messages
             messages: [],
-            inputText: ''
+            inputText: '',
+            pendingUploads: [],
         };
     },
 
@@ -61,6 +62,7 @@ window.PocketPaw.Chat = {
              */
             handleMessage(data) {
                 const content = data.content || '';
+                const media = Array.isArray(data.media) ? data.media : [];
 
                 // Check if it's a status update (don't show in chat)
                 if (content.includes('System Status') || content.includes('🧠 CPU:')) {
@@ -85,7 +87,7 @@ window.PocketPaw.Chat = {
                     this.$nextTick(() => this.scrollToBottom());
                     // Don't log streaming chunks - they flood the terminal
                 } else {
-                    this.addMessage('assistant', content);
+                    this.addMessage('assistant', content, { media });
                     // Only log complete messages (not streaming chunks)
                     if (content.trim()) {
                         this.log(content.substring(0, 100) + (content.length > 100 ? '...' : ''), 'info');
@@ -127,13 +129,16 @@ window.PocketPaw.Chat = {
             /**
              * End streaming mode
              */
-            endStreaming() {
+            endStreaming(streamEndData = {}) {
                 if (this._streamTimeout) {
                     clearTimeout(this._streamTimeout);
                     this._streamTimeout = null;
                 }
+                const media = Array.isArray(streamEndData.media) ? streamEndData.media : [];
                 if (this.isStreaming && this.streamingContent) {
-                    this.addMessage('assistant', this.streamingContent);
+                    this.addMessage('assistant', this.streamingContent, { media });
+                } else if (media.length > 0) {
+                    this.addMessage('assistant', 'Generated files ready for download:', { media });
                 }
                 this.isStreaming = false;
                 this.isThinking = false;
@@ -147,12 +152,13 @@ window.PocketPaw.Chat = {
             /**
              * Add a message to the chat
              */
-            addMessage(role, content) {
+            addMessage(role, content, extras = {}) {
                 this.messages.push({
                     role,
                     content: content || '',
                     time: Tools.formatTime(),
-                    isNew: true
+                    isNew: true,
+                    media: Array.isArray(extras.media) ? extras.media : []
                 });
 
                 // Auto scroll to bottom with slight delay for DOM update
@@ -173,12 +179,72 @@ window.PocketPaw.Chat = {
                 });
             },
 
+            onUploadPicked(event) {
+                const picked = Array.from(event.target.files || []);
+                if (picked.length === 0) return;
+                const maxBytes = 20 * 1024 * 1024; // 20MB per file
+                for (const file of picked) {
+                    if (file.size > maxBytes) {
+                        this.showToast(`Skipped ${file.name}: over 20MB limit`, 'warning');
+                        continue;
+                    }
+                    this.pendingUploads.push(file);
+                }
+                event.target.value = '';
+                this.$nextTick(() => {
+                    if (window.refreshIcons) window.refreshIcons();
+                });
+            },
+
+            removePendingUpload(index) {
+                this.pendingUploads.splice(index, 1);
+                this.$nextTick(() => {
+                    if (window.refreshIcons) window.refreshIcons();
+                });
+            },
+
+            clearPendingUploads() {
+                this.pendingUploads = [];
+                this.$nextTick(() => {
+                    if (window.refreshIcons) window.refreshIcons();
+                });
+            },
+
+            async _fileToBase64(file) {
+                return await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        const out = String(reader.result || '');
+                        const comma = out.indexOf(',');
+                        resolve(comma >= 0 ? out.slice(comma + 1) : out);
+                    };
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+            },
+
+            mediaDownloadUrl(path) {
+                return `/api/files/download?path=${encodeURIComponent(path)}`;
+            },
+
+            mediaFilename(path) {
+                if (!path) return 'file';
+                const clean = String(path).replace(/\\/g, '/');
+                const parts = clean.split('/');
+                return parts[parts.length - 1] || clean;
+            },
+
+            openMedia(path) {
+                window.open(this.mediaDownloadUrl(path), '_blank', 'noopener,noreferrer');
+            },
+
             /**
              * Send a chat message
              */
-            sendMessage() {
+            async sendMessage() {
                 const text = this.inputText.trim();
-                if (!text) return;
+                const files = [...this.pendingUploads];
+                if (!text && files.length === 0) return;
 
                 // Check for skill command (starts with /)
                 if (text.startsWith('/')) {
@@ -197,16 +263,34 @@ window.PocketPaw.Chat = {
                 }
 
                 // Add user message
-                this.addMessage('user', text);
+                const userContent = files.length > 0
+                    ? `${text || 'Uploaded file(s)'}\n\nAttached: ${files.map((f) => f.name).join(', ')}`
+                    : text;
+                this.addMessage('user', userContent);
                 this.inputText = '';
+                this.pendingUploads = [];
 
                 // Start streaming indicator
                 this.startStreaming();
 
-                // Send to server
-                socket.chat(text);
+                // Encode selected files for websocket media transport
+                const media = [];
+                for (const file of files) {
+                    try {
+                        media.push({
+                            name: file.name,
+                            mime_type: file.type || 'application/octet-stream',
+                            data: await this._fileToBase64(file),
+                        });
+                    } catch (e) {
+                        this.log(`Failed to encode ${file.name}: ${e}`, 'error');
+                    }
+                }
 
-                this.log(`You: ${text}`, 'info');
+                // Send to server
+                socket.chat(text, media);
+
+                this.log(`You: ${text || `[${files.length} file(s) uploaded]`}`, 'info');
             },
 
             /**

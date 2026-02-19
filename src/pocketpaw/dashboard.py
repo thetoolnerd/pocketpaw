@@ -35,7 +35,7 @@ try:
     import uvicorn
     from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
     from fastapi.middleware.cors import CORSMiddleware
-    from fastapi.responses import Response, StreamingResponse
+    from fastapi.responses import FileResponse, Response, StreamingResponse
     from fastapi.staticfiles import StaticFiles
     from fastapi.templating import Jinja2Templates
 except ImportError as _exc:
@@ -2986,6 +2986,33 @@ async def export_session(id: str = "", format: str = "json"):
         content=content,
         media_type=media_type,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.get("/api/files/download")
+async def download_file(path: str = Query(...)):
+    """Download a file from the allowed file-jail path."""
+    from pocketpaw.tools.fetch import is_safe_path
+
+    settings = Settings.load()
+    jail = settings.file_jail_path.resolve()
+
+    requested = Path(path)
+    if not requested.is_absolute():
+        requested = Path.home() / requested
+
+    resolved = requested.resolve()
+    if not is_safe_path(resolved, jail):
+        raise HTTPException(status_code=403, detail="Access denied: path outside allowed directory")
+    if not resolved.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    if not resolved.is_file():
+        raise HTTPException(status_code=400, detail="Path is not a file")
+
+    return FileResponse(
+        path=resolved,
+        filename=resolved.name,
+        media_type="application/octet-stream",
     )
 
 

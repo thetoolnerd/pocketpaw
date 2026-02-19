@@ -18,6 +18,7 @@ It replaces the old highly-coupled bot loops.
 import asyncio
 import logging
 import re
+from pathlib import Path
 
 from pocketpaw.agents.router import AgentRouter
 from pocketpaw.bootstrap import AgentContextBuilder
@@ -39,6 +40,7 @@ _GENERATED_PATH_RE = re.compile(
     r"(?:/[^\s`*]+/\.pocketpaw/generated/[^\s`*\)]+)"  # absolute path under generated/
     r")"
 )
+_ABS_FILE_PATH_RE = re.compile(r"(?:^|[`\s(])(/[^\s`*\"')]+)")
 
 
 def _extract_media_paths(text: str) -> list[str]:
@@ -49,6 +51,23 @@ def _extract_media_paths(text: str) -> list[str]:
 def _extract_generated_paths(text: str) -> list[str]:
     """Fallback: extract file paths under ~/.pocketpaw/generated/ from agent text."""
     return _GENERATED_PATH_RE.findall(text)
+
+
+def _extract_existing_file_paths(text: str, jail_path: Path) -> list[str]:
+    """Extract absolute file paths from text that exist and are inside file jail."""
+    jail = jail_path.resolve()
+    candidates = _ABS_FILE_PATH_RE.findall(text)
+    found: list[str] = []
+    for raw in candidates:
+        path = raw.rstrip(".,:;!?")
+        p = Path(path)
+        try:
+            resolved = p.resolve()
+            if resolved.is_file() and str(resolved).startswith(str(jail)):
+                found.append(str(resolved))
+        except Exception:
+            continue
+    return found
 
 
 async def _iter_with_timeout(aiter, first_timeout=30, timeout=120):
@@ -422,8 +441,11 @@ class AgentLoop:
             # check full_response for generated file paths (Claude SDK backend
             # runs tools via Bash — media tags stay inside the SDK and the
             # agent echoes the path in its text response instead).
-            if not media_paths and full_response:
+            if full_response:
                 media_paths.extend(_extract_generated_paths(full_response))
+                media_paths.extend(
+                    _extract_existing_file_paths(full_response, self.settings.file_jail_path)
+                )
 
             # Deduplicate while preserving order
             seen: set[str] = set()

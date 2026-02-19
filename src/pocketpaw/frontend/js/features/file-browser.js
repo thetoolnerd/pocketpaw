@@ -122,10 +122,13 @@ window.PocketPaw.FileBrowser = {
                         : `${this.filePath}/${item.name}`;
                     this.navigateTo(newPath);
                 } else {
-                    // File selected - could download or preview
-                    this.log(`Selected file: ${item.name}`, 'info');
-                    this.showToast(`Selected: ${item.name}`, 'info');
-                    // TODO: Add file download/preview functionality
+                    const fullPath = this.filePath === '~'
+                        ? item.name
+                        : `${this.filePath}/${item.name}`;
+                    const url = `/api/files/download?path=${encodeURIComponent(fullPath)}`;
+                    window.open(url, '_blank', 'noopener,noreferrer');
+                    this.log(`Downloading file: ${item.name}`, 'info');
+                    this.showToast(`Downloading: ${item.name}`, 'success');
                 }
             }
         };
