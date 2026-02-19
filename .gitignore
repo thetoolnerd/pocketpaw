@@ -62,3 +62,5 @@ idocs/
 *.pyo
 
 temp
+# Firecrawl cache
+.firecrawl/
